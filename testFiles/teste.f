@@ -5,13 +5,14 @@ PROGRAM TESTERRO
     ! Variáveis declaradas (OK)
     A = 10
     C = 5.5
-    SOMA = X
     
     ! ERRO SEMÂNTICO: 'X' não foi declarada em lado nenhum
     X = 20
+    SOMA = A + X
     
     ! ERRO SEMÂNTICO: 'SOMA' é usada numa expressão sem declaração
     B = A + SOMA
+    VALOR = SOMA
     
     ! ERRO SEMÂNTICO: 'VALOR' é usada no PRINT mas não existe
     PRINT *, 'Resultado:', VALOR
