@@ -2,6 +2,7 @@ import ply.yacc as yacc
 import sys 
 import pprint
 from lexer import FortranLexer
+from symbolTable import SymbolTable
 
 tokens = FortranLexer.tokens
 
@@ -31,7 +32,14 @@ def p_declarations(p):
 
 def p_declaration(p):
     '''declaration : type_spec id_list'''
-    p[0] = ('decl', p[1], p[2])
+    var_type = p[1]
+    var_list = p[2]
+    
+    # Register each variable in the list with the correct type
+    for var_id in var_list:
+        p.parser.symbols.declare(var_id, var_type)
+    
+    p[0] = ('decl', var_type, var_list)
 
 def p_type_spec(p):
     '''type_spec : INTEGER
@@ -77,7 +85,8 @@ def p_unlabeled_stmt(p):
 
 def p_assignment(p):
     '''assignment : ID ASSIGN expression'''
-    p[0] = ('assign', p[1], p[3])
+    expected_type = p.parser.symbols.lookup(p[1])
+    p[0] = ('assign', p[1], p[3], expected_type)
 
 def p_print_stmt(p):
     '''print_stmt : PRINT STAR COMMA expression_list'''
@@ -134,7 +143,8 @@ def p_expression_val(p):
                   | TRUE
                   | FALSE'''
     p[0] = ('val', p[1])
-
+    if isinstance(p[1], str) and p.slice[1].type == 'ID':
+        p.parser.symbols.lookup(p[1])
 def p_expression_list(p):
     '''expression_list : expression_list COMMA expression
                        | expression'''
@@ -181,16 +191,18 @@ if __name__ == "__main__":
     f_lexer = FortranLexer()
     f_lexer.build()
     parser = yacc.yacc()
-
-    filename = "programaTeste.f"
+    path = "../testFiles/"
+    filename = "teste.f"
+    filepath = path + filename
 
     try:
-        with open(filename, 'r') as f:
+        with open(filepath, 'r') as f:
             test_code = f.read()
         
-        print(f"--- A processar: {filename} ---")
+        print(f"--- A processar: {filepath} ---")
         
         # Executa o parser
+        parser.symbols = SymbolTable()
         result = parser.parse(test_code, lexer=f_lexer.lexer)
         
         if result:
@@ -200,6 +212,6 @@ if __name__ == "__main__":
             print("\nFalha ao gerar a AST.")
 
     except FileNotFoundError:
-        print(f"Erro: O ficheiro '{filename}' não foi encontrado.")
+        print(f"Erro: O ficheiro '{filepath}' não foi encontrado.")
     except Exception as e:
         print(f"Erro durante o processamento: {e}")
