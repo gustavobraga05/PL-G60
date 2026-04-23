@@ -2,7 +2,7 @@ import ply.yacc as yacc
 import sys 
 import pprint
 from lexer import FortranLexer
-from symbolTable import SymbolTable
+from symbolTable import SymbolTable, SemanticError
 
 tokens = FortranLexer.tokens
 
@@ -85,8 +85,10 @@ def p_unlabeled_stmt(p):
 
 def p_assignment(p):
     '''assignment : ID ASSIGN expression'''
-    expected_type = p.parser.symbols.lookup(p[1])
+    entry = p.parser.symbols.lookup(p[1])
+    expected_type = entry['type']
     p[0] = ('assign', p[1], p[3], expected_type)
+    p.parser.symbols.initialize(p[1])
 
 def p_print_stmt(p):
     '''print_stmt : PRINT STAR COMMA expression_list'''
@@ -95,6 +97,8 @@ def p_print_stmt(p):
 def p_read_stmt(p):
     '''read_stmt : READ STAR COMMA id_list'''
     p[0] = ('read', p[4])
+    for var_id in p[4]:
+        p.parser.symbols.initialize(var_id)
 
 def p_goto_stmt(p):
     '''goto_stmt : GOTO LABEL'''
@@ -142,9 +146,11 @@ def p_expression_val(p):
                   | STRING_CONST
                   | TRUE
                   | FALSE'''
-    p[0] = ('val', p[1])
     if isinstance(p[1], str) and p.slice[1].type == 'ID':
-        p.parser.symbols.lookup(p[1])
+        entry = p.parser.symbols.lookup(p[1])
+        if not entry['initialized']:
+            raise SemanticError(f"Variable {p[1]} used before initialization")
+    p[0] = ('val', p[1])
 def p_expression_list(p):
     '''expression_list : expression_list COMMA expression
                        | expression'''
@@ -211,6 +217,8 @@ if __name__ == "__main__":
         else:
             print("\nFalha ao gerar a AST.")
 
+    except SemanticError as e:
+        print(f"Erro Semântico: {e}")
     except FileNotFoundError:
         print(f"Erro: O ficheiro '{filepath}' não foi encontrado.")
     except Exception as e:

@@ -5,6 +5,7 @@ PROGRAM TESTERRO
     ! Variáveis declaradas (OK)
     A = 10
     C = 5.5
+    SOMA = X
     
     ! ERRO SEMÂNTICO: 'X' não foi declarada em lado nenhum
     X = 20
