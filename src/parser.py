@@ -1,4 +1,6 @@
 import ply.yacc as yacc
+import sys 
+import pprint
 from lexer import FortranLexer
 
 tokens = FortranLexer.tokens
@@ -128,7 +130,9 @@ def p_expression_val(p):
     '''expression : INT_CONST
                   | REAL_CONST
                   | ID
-                  | STRING_CONST'''
+                  | STRING_CONST
+                  | TRUE
+                  | FALSE'''
     p[0] = ('val', p[1])
 
 def p_expression_list(p):
@@ -171,22 +175,31 @@ def p_error(p):
     else:
         print(f"Erro Sintatico na linha {p.lineno} perto de '{p.value}'")
 
-# Inicialização
-f_lexer = FortranLexer()
-f_lexer.build()
-parser = yacc.yacc()
-
 if __name__ == "__main__":
-    test_code = """
-    PROGRAM FATORIAL
-    INTEGER N, I, FAT
-    N = 5
-    FAT = 1
-    DO 10 I = 1, N
-    FAT = FAT * I
-    10 CONTINUE
-    PRINT *, 'Fatorial:', FAT
-    END
-    """
-    result = parser.parse(test_code, lexer=f_lexer.lexer)
-    print(result)
+    # Verifica se passaste o nome do ficheiro como argumento ou usa o padrão
+    # Inicialização
+    f_lexer = FortranLexer()
+    f_lexer.build()
+    parser = yacc.yacc()
+
+    filename = "programaTeste.f"
+
+    try:
+        with open(filename, 'r') as f:
+            test_code = f.read()
+        
+        print(f"--- A processar: {filename} ---")
+        
+        # Executa o parser
+        result = parser.parse(test_code, lexer=f_lexer.lexer)
+        
+        if result:
+            print("\n--- Árvore de Sintaxe Abstrata (AST) Gerada ---")
+            pprint.pprint(result)
+        else:
+            print("\nFalha ao gerar a AST.")
+
+    except FileNotFoundError:
+        print(f"Erro: O ficheiro '{filename}' não foi encontrado.")
+    except Exception as e:
+        print(f"Erro durante o processamento: {e}")
