@@ -1,0 +1,165 @@
+from symbolTable import SymbolTable, SemanticError
+
+class SemanticAnalyzer:
+    def __init__(self):
+        self.symbols = SymbolTable()
+
+    def analyze(self, ast):
+        if not ast: return
+        
+        if ast[0] == 'program':
+            self.visit_body(ast[2])
+            
+    def visit_body(self, body):
+        for decl in body['decls']:
+            self.visit_declaration(decl)
+            
+        for stmt in body['stmts']:
+            self.visit_statement(stmt)
+
+    def visit_declaration(self, decl):
+        var_type = decl[1]
+        var_list = decl[2]
+        
+        for var_id in var_list:
+            self.symbols.declare(var_id, var_type)
+
+    def visit_statement(self, stmt):
+        if stmt[0] == 'labeled':
+            stmt = stmt[2]
+            
+        kind = stmt[0]
+        if kind == 'assign':
+            self.visit_assign(stmt)
+        elif kind == 'print':
+            self.visit_print(stmt)
+        elif kind == 'read':
+            self.visit_read(stmt)
+        elif kind == 'do':
+            self.visit_do(stmt)
+        elif kind == 'if':
+            self.visit_if(stmt)
+
+
+    def visit_assign(self, stmt):
+        _, var_id, expr = stmt
+        entry = self.symbols.lookup(var_id)
+        expected_type = entry['type']
+        
+        expr_type = self.visit_expression(expr)
+        
+        if expr_type != expected_type and not (expr_type == 'INTEGER' and expected_type == 'REAL'):
+            raise SemanticError(f"Não é possível atribuir uma expressão '{expr_type}' à variável '{var_id}' (declarada como {expected_type}).")
+        
+        self.symbols.initialize(var_id)
+
+    def visit_print(self, stmt):
+        _, expr_list = stmt
+        for expr in expr_list:
+            self.visit_expression(expr)
+
+    def visit_read(self, stmt):
+        _, id_list = stmt
+        for var_id in id_list:
+            self.symbols.lookup(var_id)  
+            self.symbols.initialize(var_id)  
+
+    def visit_do(self, stmt):
+        _, label, var_id, start_expr, end_expr = stmt
+        
+        entry = self.symbols.lookup(var_id)
+        if entry['type'] != 'INTEGER':
+            raise SemanticError(f"A variável de controlo do DO ('{var_id}') tem de ser INTEGER.")
+        
+        self.symbols.initialize(var_id)
+        
+        start_type = self.visit_expression(start_expr)
+        end_type = self.visit_expression(end_expr)
+        
+        if start_type != 'INTEGER' or end_type != 'INTEGER':
+            raise SemanticError(f"Os limites do ciclo DO devem ser inteiros. Recebido: {start_type} e {end_type}")
+
+    def visit_if(self, stmt):
+        _, cond_expr, then_stmts, else_stmts = stmt
+        
+        cond_type = self.visit_condition(cond_expr)
+        if cond_type != 'LOGICAL':
+            raise SemanticError(f"A condição do IF deve ser LOGICAL, recebido: {cond_type}")
+            
+        for s in then_stmts:
+            self.visit_statement(s)
+            
+        if else_stmts:
+            for s in else_stmts:
+                self.visit_statement(s)
+
+    def visit_expression(self, expr):
+        kind = expr[0]
+        
+        if kind == 'val':
+            val, tok_type = expr[1], expr[2]
+            
+            if tok_type == 'ID':
+                entry = self.symbols.lookup(val)
+                if not entry['initialized']:
+                    raise SemanticError(f"Variável '{val}' foi usada numa expressão mas não foi inicializada.")
+                return entry['type']
+            
+            elif tok_type == 'INT_CONST': return 'INTEGER'
+            elif tok_type == 'REAL_CONST': return 'REAL'
+            elif tok_type == 'STRING_CONST': return 'STRING'
+            elif tok_type in ['TRUE', 'FALSE']: return 'LOGICAL'
+            
+        elif kind == 'binop':
+            _, op, left, right = expr
+            lt = self.visit_expression(left)
+            rt = self.visit_expression(right)
+            
+            if lt not in ['INTEGER', 'REAL'] or rt not in ['INTEGER', 'REAL']:
+                raise SemanticError(f"Operação matemática ({op}) requer valores numéricos. Encontrados {lt} e {rt}.")
+                
+            return 'REAL' if 'REAL' in [lt, rt] else 'INTEGER'
+            
+        elif kind == 'unary':
+            _, op, operand = expr
+            t = self.visit_expression(operand)
+            if t not in ['INTEGER', 'REAL']:
+                raise SemanticError(f"Operação unária ({op}) requer um valor numérico. Encontrado {t}.")
+            return t
+            
+        elif kind in ['cond', 'not', 'bool']:
+            return self.visit_condition(expr)
+
+    def visit_condition(self, cond):
+        kind = cond[0]
+        
+        if kind == 'cond':
+            _, op, left, right = cond
+            
+            if op in ['.EQ.', '.NE.', '.LT.', '.LE.', '.GT.', '.GE.']:
+                lt = self.visit_expression(left)
+                rt = self.visit_expression(right)
+                
+                if not ((lt in ['INTEGER', 'REAL'] and rt in ['INTEGER', 'REAL']) or (lt == 'LOGICAL' and rt == 'LOGICAL')):
+                    raise SemanticError(f"Comparação ({op}) requer tipos compatíveis. Encontrados {lt} e {rt}.")
+            else:
+                lt = self.visit_condition(left)
+                rt = self.visit_condition(right)
+                
+                if lt != 'LOGICAL' or rt != 'LOGICAL':
+                    raise SemanticError(f"Operação Lógica ({op}) requer condições ou booleanos.")
+            
+            return 'LOGICAL'
+            
+        elif kind == 'not':
+            t = self.visit_condition(cond[1])
+            if t != 'LOGICAL':
+                raise SemanticError("NOT requer um booleano ou condição à sua frente.")
+            return 'LOGICAL'
+            
+        elif kind == 'bool':
+            return 'LOGICAL'
+            
+        else:
+            # Caso uma expressão normal (ex: ID) seja avaliada como condição: `IF (FLAG)` onde FLAG é ID
+            return self.visit_expression(cond)
