@@ -12,7 +12,7 @@ PROGRAM TESTERRO
     
     ! ERRO SEMÂNTICO: 'SOMA' é usada numa expressão sem declaração
     B = A + SOMA
-    VALOR = SOMA
+    VALOR = SOMA + X
     
     ! ERRO SEMÂNTICO: 'VALOR' é usada no PRINT mas não existe
     PRINT *, 'Resultado:', VALOR

@@ -1,10 +1,11 @@
 PROGRAM SOMA_LOOP
-    INTEGER N, TOTAL
+    INTEGER N, TOTAL, I
     INTEGER W
     
     ! Inicializacao
     TOTAL = 0
     N = 10
+    I = 1
     
     PRINT *, 'CALCULANDO A SOMA DE 1 A', N
     

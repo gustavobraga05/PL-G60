@@ -181,7 +181,7 @@ if __name__ == "__main__":
     f_lexer.build()
     parser = yacc.yacc()
     
-    filepath = "../testFiles/teste.f"
+    filepath = "../testFiles/teste1.f"
 
     try:
         with open(filepath, 'r') as f:
