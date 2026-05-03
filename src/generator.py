@@ -1,5 +1,3 @@
-import collections
-
 class CodeGenerator:
     def __init__(self):
         self.offsets = {}
@@ -7,7 +5,7 @@ class CodeGenerator:
         self.next_offset = 0
         self.code = []
         self.label_count = 0
-        self.do_loops = collections.defaultdict(list)
+        self.do_loops = {}
 
     def _new_label(self, prefix):
         self.label_count += 1
@@ -113,7 +111,7 @@ class CodeGenerator:
             self.code.append("INFEQ")
             self.code.append(f"JZ {exit_label}")
 
-            self.do_loops[target_label].append((var_id, start_label, exit_label))
+            self.do_loops.setdefault(target_label, []).append((var_id, start_label, exit_label))
 
         elif stmt_kind == "if":
             _, cond_expr, then_stmts, else_stmts = stmt
