@@ -4,6 +4,7 @@ import pprint
 from lexer import FortranLexer
 from semantic import SemanticAnalyzer
 from symbolTable import SemanticError
+from generator import CodeGenerator
 
 tokens = FortranLexer.tokens
 
@@ -197,6 +198,15 @@ if __name__ == "__main__":
             
             print("--- Árvore Final ---")
             pprint.pprint(ast)
+
+            print("----- Código -----")
+            generator = CodeGenerator()
+            final_code = generator.generate(ast)
+
+            for l in final_code:
+                print(l)
+
+
         else:
             print("\nFalha ao gerar a AST.")
 

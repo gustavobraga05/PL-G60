@@ -11,7 +11,7 @@ class CodeGenerator:
 
     def _new_label(self, prefix):
         self.label_count += 1
-        return f"{prefix}_{self.label_count}"
+        return f"{prefix}{self.label_count}"
 
     def generate(self, ast):
         if not ast:
@@ -44,8 +44,7 @@ class CodeGenerator:
 
         if stmt[0] == "labeled":
             label = stmt[1]
-            self.code.append(f"L{label}:")
-            self.visit_statement(stmt[2])
+            
 
             if label in self.do_loops:
                 for var_id, start_label, exit_label in reversed(self.do_loops[label]):
@@ -56,7 +55,10 @@ class CodeGenerator:
                     self.code.append(f"JUMP {start_label}")
                     self.code.append(f"{exit_label}:")
                 del self.do_loops[label]
-            return
+                return
+        
+            self.code.append(f"L{label}:")
+            self.visit_statement(stmt[2])
 
         stmt_kind = stmt[0]
 
@@ -102,8 +104,8 @@ class CodeGenerator:
             self.visit_expression(start_expr)
             self.code.append(f"STOREG {self.offsets[var_id]}")
 
-            start_label = self._new_label("DO_START")
-            exit_label = self._new_label("DO_END")
+            start_label = self._new_label("DOSTART")
+            exit_label = self._new_label("DOEND")
 
             self.code.append(f"{start_label}:")
             self.code.append(f"PUSHG {self.offsets[var_id]}")
