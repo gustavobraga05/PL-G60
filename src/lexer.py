@@ -22,7 +22,8 @@ class FortranLexer:
         'return': 'RETURN',
         'call': 'CALL',
         'function': 'FUNCTION',
-        'subroutine': 'SUBROUTINE'
+        'subroutine': 'SUBROUTINE',
+        'mod': 'MOD'
     }
 
     # 2. Lista Completa de Tokens

@@ -44,9 +44,15 @@ def p_type_spec(p):
 
 def p_id_list(p):
     '''id_list : id_list COMMA ID
+               | id_list COMMA ID LPAREN expression RPAREN
+               | ID LPAREN expression RPAREN
                | ID'''
     if len(p) == 4:
         p[0] = p[1] + [p[3]]
+    elif len(p) == 7:
+        p[0] = p[1] + [('array', p[3], p[5])]
+    elif len(p) == 5:
+        p[0] = [('array', p[1], p[3])]
     else:
         p[0] = [p[1]]
 
@@ -79,8 +85,13 @@ def p_unlabeled_stmt(p):
     p[0] = p[1]
 
 def p_assignment(p):
-    '''assignment : ID ASSIGN expression'''
-    p[0] = ('assign', p[1], p[3])
+    '''assignment : ID ASSIGN expression
+                  | ID LPAREN expression RPAREN ASSIGN expression'''
+    if len(p) == 4:
+        p[0] = ('assign', p[1], p[3])
+    else:
+        # Array assignment: ARRAY(index) = value
+        p[0] = ('array_assign', p[1], p[3], p[6])
 
 def p_print_stmt(p):
     '''print_stmt : PRINT STAR COMMA expression_list'''
@@ -94,6 +105,10 @@ def p_goto_stmt(p):
     '''goto_stmt : GOTO LABEL'''
     p[0] = ('goto', p[2])
 
+def p_expression_mod(p):
+    '''expression : MOD LPAREN expression COMMA expression RPAREN'''
+    p[0] = ('mod', p[3], p[5])
+
 def p_continue_stmt(p):
     '''continue_stmt : CONTINUE'''
     p[0] = ('continue',)
@@ -103,8 +118,8 @@ def p_do_stmt(p):
     p[0] = ('do', p[2], p[3], p[5], p[7])
 
 def p_if_stmt(p):
-    '''if_stmt : IF LPAREN condition RPAREN THEN statements ELSE statements ENDIF
-               | IF LPAREN condition RPAREN THEN statements ENDIF'''
+    '''if_stmt : IF LPAREN expression RPAREN THEN statements ELSE statements ENDIF
+               | IF LPAREN expression RPAREN THEN statements ENDIF'''
     if len(p) == 10:
         p[0] = ('if', p[3], p[6], p[8])
     else:
@@ -121,6 +136,10 @@ def p_expression_binop(p):
 def p_expression_group(p):
     '''expression : LPAREN expression RPAREN'''
     p[0] = p[2]
+
+def p_expression_array(p):
+    '''expression : ID LPAREN expression RPAREN'''
+    p[0] = ('array', p[1], p[3])
 
 def p_expression_unary(p):
     '''expression : MINUS expression %prec UMINUS
@@ -146,18 +165,15 @@ def p_expression_list(p):
         p[0] = [p[1]]
 
 def p_condition(p):
-    '''condition : expression EQ expression
+    '''expression : expression EQ expression
                  | expression NE expression
                  | expression LT expression
                  | expression LE expression
                  | expression GT expression
                  | expression GE expression
-                 | condition AND condition
-                 | condition OR condition
-                 | NOT condition
-                 | LPAREN condition RPAREN
-                 | TRUE
-                 | FALSE'''
+                 | expression AND expression
+                 | expression OR expression
+                 | NOT expression'''
     if len(p) == 4 and p[1] == '(':
         p[0] = p[2]
     elif len(p) == 4:
@@ -182,7 +198,7 @@ if __name__ == "__main__":
     f_lexer.build()
     parser = yacc.yacc()
     
-    filepath = "../testFiles/teste1.f"
+    filepath = "../testFiles/ex4.f"
 
     try:
         with open(filepath, 'r') as f:

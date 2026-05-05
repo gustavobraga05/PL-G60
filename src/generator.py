@@ -23,9 +23,22 @@ class CodeGenerator:
         for decl in body["decls"]:
             _, var_type, ids = decl
             for var_id in ids:
-                self.offsets[var_id] = self.next_offset
-                self.types[var_id] = var_type
-                self.next_offset += 1
+                if isinstance(var_id, tuple) and var_id[0] == 'array':
+                    # Array declaration: ('array', name, size_expr)
+                    name = var_id[1]
+                    # Evaluate the size expression (should be INT_CONST for now)
+                    if var_id[2][0] == 'val' and var_id[2][2] == 'INT_CONST':
+                        size = var_id[2][1]
+                    else:
+                        size = 1  # default fallback
+                    self.offsets[name] = self.next_offset
+                    self.types[name] = var_type
+                    self.next_offset += size
+                else:
+                    # Scalar declaration
+                    self.offsets[var_id] = self.next_offset
+                    self.types[var_id] = var_type
+                    self.next_offset += 1
 
         if self.next_offset > 0:
             self.code.append(f"PUSHN {self.next_offset}")
@@ -64,6 +77,27 @@ class CodeGenerator:
             _, var_id, expr = stmt
             self.visit_expression(expr)
             self.code.append(f"STOREG {self.offsets[var_id]}")
+        
+        elif stmt_kind == "array_assign":
+            # ARRAY(index) = value
+            _, name, index_expr, value_expr = stmt
+            
+            # 1. Colocar o ponteiro para a base da memória global (Tipo Address)
+            self.code.append("PUSHGP")
+            
+            # 2. Somar o offset inicial do array ao ponteiro global
+            self.code.append(f"PUSHI {self.offsets[name]}")
+            self.code.append("PADD")
+            
+            # 3. Calcular o índice e somar ao ponteiro (Resultado: Endereço do elemento)
+            self.visit_expression(index_expr)
+            self.code.append("PADD")
+            
+            # 4. Calcular o valor a ser guardado
+            self.visit_expression(value_expr)
+            
+            # 5. Agora sim, STORE 0 funcionará porque tem um Address na pilha
+            self.code.append("STORE 0")
 
         elif stmt_kind == "print":
             _, expr_list = stmt
@@ -81,13 +115,32 @@ class CodeGenerator:
         elif stmt_kind == "read":
             _, id_list = stmt
             for var_id in id_list:
-                self.code.append("READ")
-                var_type = self.types[var_id]
-                if var_type == "REAL":
-                    self.code.append("ATOF")
+                if isinstance(var_id, tuple) and var_id[0] == 'array':
+                    _, name, index_expr = var_id
+                    
+                    # 1. Calcula e deixa o Address no fundo
+                    self.code.append("PUSHGP")
+                    self.code.append(f"PUSHI {self.offsets[name]}")
+                    self.code.append("PADD")
+                    self.visit_expression(index_expr)
+                    self.code.append("PADD")
+                    
+                    # 2. Lê o valor (o valor fica no topo, acima do Address)
+                    self.code.append("READ")
+                    var_type = self.types[name]
+                    self.code.append("ATOF" if var_type == "REAL" else "ATOI")
+                    
+                    # 3. Guarda
+                    self.code.append("STORE 0")
                 else:
-                    self.code.append("ATOI")
-                self.code.append(f"STOREG {self.offsets[var_id]}")
+                    # Read into scalar variable
+                    self.code.append("READ")
+                    var_type = self.types[var_id]
+                    if var_type == "REAL":
+                        self.code.append("ATOF")
+                    else:
+                        self.code.append("ATOI")
+                    self.code.append(f"STOREG {self.offsets[var_id]}")
 
         elif stmt_kind == "goto":
             _, label = stmt
@@ -116,8 +169,8 @@ class CodeGenerator:
         elif stmt_kind == "if":
             _, cond_expr, then_stmts, else_stmts = stmt
 
-            else_label = self._new_label("IF_ELSE")
-            end_label = self._new_label("IF_END")
+            else_label = self._new_label("IFELSE")
+            end_label = self._new_label("IFEND")
 
             self.visit_condition(cond_expr)
             self.code.append(f"JZ {else_label}")
@@ -160,6 +213,31 @@ class CodeGenerator:
             if op == "-":
                 self.code.append("PUSHI -1")
                 self.code.append("MUL")
+            return
+        
+        if kind == "mod":
+            _, left, right = expr
+            self.visit_expression(left)
+            self.visit_expression(right)
+            self.code.append("MOD")
+            return
+
+        elif kind == "array":
+            _, name, index_expr = expr
+            
+            # 1. Obter ponteiro global
+            self.code.append("PUSHGP")
+            
+            # 2. Ir até ao início do array
+            self.code.append(f"PUSHI {self.offsets[name]}")
+            self.code.append("PADD")
+            
+            # 3. Somar o índice (usa PADD)
+            self.visit_expression(index_expr)
+            self.code.append("PADD")
+            
+            # 4. Carregar o valor daquele endereço
+            self.code.append("LOAD 0")
             return
 
         if kind == "binop":
@@ -247,6 +325,13 @@ class CodeGenerator:
 
         if kind == "unary":
             return self.infer_expression_type(expr[2])
+
+        if kind == "mod":
+            return "INTEGER"
+        
+        if kind == "array":
+            _, name, _ = expr
+            return self.types[name]
 
         return "LOGICAL"
 

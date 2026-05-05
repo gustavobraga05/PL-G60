@@ -22,7 +22,10 @@ class SemanticAnalyzer:
         var_list = decl[2]
         
         for var_id in var_list:
-            self.symbols.declare(var_id, var_type)
+            if isinstance(var_id, tuple) and var_id[0] == 'array':
+                self.symbols.declare(var_id, var_type)
+            else:
+                self.symbols.declare(var_id, var_type)
 
     def visit_statement(self, stmt):
         if stmt[0] == 'labeled':
@@ -31,6 +34,8 @@ class SemanticAnalyzer:
         kind = stmt[0]
         if kind == 'assign':
             self.visit_assign(stmt)
+        elif kind == 'array_assign':
+            self.visit_array_assign(stmt)
         elif kind == 'print':
             self.visit_print(stmt)
         elif kind == 'read':
@@ -53,6 +58,26 @@ class SemanticAnalyzer:
         
         self.symbols.initialize(var_id)
 
+    def visit_array_assign(self, stmt):
+        # ('array_assign', name, index_expr, value_expr)
+        _, name, index_expr, value_expr = stmt
+        entry = self.symbols.lookup(name)
+        if entry.get('kind') != 'array':
+            raise SemanticError(f"'{name}' não é um array.")
+        expected_type = entry['type']
+        
+        # Check index type
+        idx_type = self.visit_expression(index_expr)
+        if idx_type != 'INTEGER':
+            raise SemanticError(f"Índice de array para '{name}' deve ser INTEGER, recebeu {idx_type}.")
+        
+        # Check value type
+        value_type = self.visit_expression(value_expr)
+        if value_type != expected_type and not (value_type == 'INTEGER' and expected_type == 'REAL'):
+            raise SemanticError(f"Não é possível atribuir uma expressão '{value_type}' ao array '{name}' (declarado como {expected_type}).")
+        
+        self.symbols.initialize(name)
+
     def visit_print(self, stmt):
         _, expr_list = stmt
         for expr in expr_list:
@@ -61,8 +86,12 @@ class SemanticAnalyzer:
     def visit_read(self, stmt):
         _, id_list = stmt
         for var_id in id_list:
-            self.symbols.lookup(var_id)  
-            self.symbols.initialize(var_id)  
+            if isinstance(var_id, tuple) and var_id[0] == 'array':
+                self.symbols.lookup(var_id[1])
+                self.symbols.initialize(var_id[1])
+            else:
+                self.symbols.lookup(var_id)
+                self.symbols.initialize(var_id)
 
     def visit_do(self, stmt):
         _, label, var_id, start_expr, end_expr = stmt
@@ -119,13 +148,34 @@ class SemanticAnalyzer:
                 raise SemanticError(f"Operação matemática ({op}) requer valores numéricos. Encontrados {lt} e {rt}.")
                 
             return 'REAL' if 'REAL' in [lt, rt] else 'INTEGER'
+        
+        elif kind == 'mod':
+            _, left, right = expr
+            lt = self.visit_expression(left)
+            rt = self.visit_expression(right)
+
+            if lt not in ['INTEGER', 'REAL'] or rt not in ['INTEGER', 'REAL']:
+                raise SemanticError(f"Operação matemática (.MOD.) requer valores numéricos. Encontrados {lt} e {rt}.")
             
+            return 'INTEGER'
+            
+        elif kind == 'array':
+            _, name, index = expr
+            entry = self.symbols.lookup(name)
+            if entry.get('kind') != 'array':
+                raise SemanticError(f"'{name}' não é um array.")
+            idx_type = self.visit_expression(index)
+            if idx_type != 'INTEGER':
+                raise SemanticError(f"Índice de array para '{name}' deve ser INTEGER, recebeu {idx_type}.")
+            return entry['type']
+
         elif kind == 'unary':
             _, op, operand = expr
             t = self.visit_expression(operand)
             if t not in ['INTEGER', 'REAL']:
                 raise SemanticError(f"Operação unária ({op}) requer um valor numérico. Encontrado {t}.")
             return t
+        
             
         elif kind in ['cond', 'not', 'bool']:
             return self.visit_condition(expr)
