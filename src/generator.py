@@ -31,7 +31,7 @@ class CodeGenerator:
                         size = var_id[2][1]
                     else:
                         size = 1  # default fallback
-                    self.offsets[name] = self.next_offset
+                    self.offsets[name] = self.next_offset - 1
                     self.types[name] = var_type
                     self.next_offset += size
                 else:
