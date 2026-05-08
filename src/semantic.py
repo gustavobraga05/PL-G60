@@ -1,4 +1,5 @@
 from symbolTable import SymbolTable, SemanticError
+from optimizer import fold_constants
 
 class SemanticAnalyzer:
     def __init__(self):
@@ -7,26 +8,34 @@ class SemanticAnalyzer:
         self.labeled_statements = set()  # Rótulos de statements encontrados
 
     def analyze(self, ast):
+    
         if not ast: return
         
         if ast[0] == 'program':
+            # 1. Processar Declarações de Variáveis
             for decl in ast[2]['decls']:
                 self.visit_declaration(decl)
 
-            # Declaração de funções
+            # 2. Processar Declaração de Funções
             for func in ast[3]:
                 _, func_type, func_name, arg_list, body = func
                 self.symbols.declare(func_name, func_type, len(arg_list))
 
+            # 3. Processar, Validar e Otimizar Statements (Tudo num só passo)
+            optimized_stmts = []
             for stmt in ast[2]['stmts']:
-                self.visit_statement(stmt)
+                # visit_statement agora valida a semântica E devolve o nó otimizado
+                new_stmt = self.visit_statement(stmt)
+                optimized_stmts.append(new_stmt)
             
-            # Verificar se todos os DO loops foram fechados com labels correspondentes
+            # 4. Atualizar a AST com a versão otimizada
+            ast[2]['stmts'] = optimized_stmts
+            
+            # 5. Verificar se sobraram DO loops abertos
             if self.pending_do_labels:
                 missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
-                raise SemanticError(f"DO loops com rótulos faltantes: {missing_labels}. Cada DO loop deve terminar com um CONTINUE com o rótulo correspondente.")
+                raise SemanticError(f"DO loops com rótulos faltantes: {missing_labels}.")
                 
-            
     def visit_body(self, body):
         for decl in body['decls']:
             self.visit_declaration(decl)
@@ -51,35 +60,52 @@ class SemanticAnalyzer:
             # Verificar se este rótulo fecha um DO loop
             if label in self.pending_do_labels:
                 self.pending_do_labels.remove(label)
-            
-            stmt = stmt[2]
-            
+            inner = stmt[2]
+            new_inner = self.visit_statement(inner)
+            return ('labeled', label, new_inner)
+
         kind = stmt[0]
         if kind == 'assign':
-            self.visit_assign(stmt)
+            return self.visit_assign(stmt)
         elif kind == 'array_assign':
-            self.visit_array_assign(stmt)
+            return self.visit_array_assign(stmt)
         elif kind == 'print':
-            self.visit_print(stmt)
+            return self.visit_print(stmt)
         elif kind == 'read':
-            self.visit_read(stmt)
+            return self.visit_read(stmt)
         elif kind == 'do':
-            self.visit_do(stmt)
+            return self.visit_do(stmt)
         elif kind == 'if':
-            self.visit_if(stmt)
+            return self.visit_if(stmt)
+
+        # Por omissão, devolve o stmt inalterado
+        return stmt
 
 
     def visit_assign(self, stmt):
         _, var_id, expr = stmt
+        optimized_expr = fold_constants(expr, self.symbols)
         entry = self.symbols.lookup(var_id)
         expected_type = entry['type']
         
-        expr_type = self.visit_expression(expr)
+        expr_type = self.visit_expression(optimized_expr)
         
         if expr_type != expected_type and not (expr_type == 'INTEGER' and expected_type == 'REAL'):
             raise SemanticError(f"Não é possível atribuir uma expressão '{expr_type}' à variável '{var_id}' (declarada como {expected_type}).")
         
         self.symbols.initialize(var_id)
+
+        # Se a expressão é um valor constante, regista-o na symbol table
+        if optimized_expr[0] == 'val' and optimized_expr[2] in ['INT_CONST', 'REAL_CONST', 'STRING_CONST', 'TRUE', 'FALSE']:
+            self.symbols.set_constant(var_id, optimized_expr[1], optimized_expr[2])
+        else:
+            # Atribuição não-constante remove qualquer valor constante anterior
+            try:
+                self.symbols.clear_constant(var_id)
+            except Exception:
+                pass
+
+        return ('assign', var_id, optimized_expr)
 
     def visit_array_assign(self, stmt):
         # ('array_assign', name, index_expr, value_expr)
@@ -99,23 +125,47 @@ class SemanticAnalyzer:
         if value_type != expected_type and not (value_type == 'INTEGER' and expected_type == 'REAL'):
             raise SemanticError(f"Não é possível atribuir uma expressão '{value_type}' ao array '{name}' (declarado como {expected_type}).")
         
+        # Escrever num elemento de array invalida qualquer constante associada ao array
+        try:
+            self.symbols.clear_constant(name)
+        except Exception:
+            pass
+
         self.symbols.initialize(name)
 
+        # Otimização: tentar dobrar constantes no índice e no valor
+        idx_opt = fold_constants(index_expr, self.symbols)
+        val_opt = fold_constants(value_expr, self.symbols)
+        return ('array_assign', name, idx_opt, val_opt)
     def visit_print(self, stmt):
         _, expr_list = stmt
+        new_list = []
         for expr in expr_list:
-            self.visit_expression(expr)
+            new_expr = fold_constants(expr, self.symbols)
+            # Também valida tipos/uso das variáveis
+            self.visit_expression(new_expr)
+            new_list.append(new_expr)
+        return ('print', new_list)
 
     def visit_read(self, stmt):
         _, id_list = stmt
         for var_id in id_list:
             if isinstance(var_id, tuple) and var_id[0] == 'array':
                 self.symbols.lookup(var_id[1])
+                # Read invalida valores constantes
+                try:
+                    self.symbols.clear_constant(var_id[1])
+                except Exception:
+                    pass
                 self.symbols.initialize(var_id[1])
             else:
                 self.symbols.lookup(var_id)
+                try:
+                    self.symbols.clear_constant(var_id)
+                except Exception:
+                    pass
                 self.symbols.initialize(var_id)
-
+        return stmt
     def visit_do(self, stmt):
         _, label, var_id, start_expr, end_expr = stmt
         
@@ -133,20 +183,29 @@ class SemanticAnalyzer:
         
         if start_type != 'INTEGER' or end_type != 'INTEGER':
             raise SemanticError(f"Os limites do ciclo DO devem ser inteiros. Recebido: {start_type} e {end_type}")
-
+        # Otimizar limites do DO
+        start_opt = fold_constants(start_expr, self.symbols)
+        end_opt = fold_constants(end_expr, self.symbols)
+        return ('do', label, var_id, start_opt, end_opt)
     def visit_if(self, stmt):
         _, cond_expr, then_stmts, else_stmts = stmt
-        
-        cond_type = self.visit_condition(cond_expr)
+
+        # Dobrar constantes na condição
+        cond_opt = fold_constants(cond_expr, self.symbols)
+
+        cond_type = self.visit_condition(cond_opt)
         if cond_type != 'LOGICAL':
             raise SemanticError(f"A condição do IF deve ser LOGICAL, recebido: {cond_type}")
-            
+
+        new_then = []
         for s in then_stmts:
-            self.visit_statement(s)
-            
+            new_then.append(self.visit_statement(s))
+
+        new_else = None
         if else_stmts:
-            for s in else_stmts:
-                self.visit_statement(s)
+            new_else = [self.visit_statement(s) for s in else_stmts]
+
+        return ('if', cond_opt, new_then, new_else)
 
     def visit_expression(self, expr):
         kind = expr[0]
