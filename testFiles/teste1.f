@@ -1,20 +1,32 @@
-PROGRAM SOMA_LOOP
-    INTEGER N, TOTAL, I
-    INTEGER W
-    
-    ! Inicializacao
-    TOTAL = 0
-    N = 10
-    I = 1
-    
-    PRINT *, 'CALCULANDO A SOMA DE 1 A', N
-    
-    ! Ciclo DO com label 20
-    DO 20 I = 1, N
-        TOTAL = TOTAL + I
-        PRINT *, 'PASSO:', I, ' SOMA ATUAL:', TOTAL
-    20 CONTINUE
-    
-    PRINT *, 'RESULTADO FINAL:', TOTAL
-    
-END
+{'decls': [('decl', 'INTEGER', ['N', 'B', 'QUOT', 'REM', 'POT', 'VAL'])],
+    'stmts': [('assign', 'VAL', ('val', 0, 'INT_CONST')),
+              ('assign', 'POT', ('val', 1, 'INT_CONST')),
+              ('assign', 'QUOT', ('val', 'N', 'ID')),
+              ('labeled',
+               20,
+               ('if',
+                ('cond',
+                 '.GT.',
+                 ('val', 'QUOT', 'ID'),
+                 ('val', 0, 'INT_CONST')),
+                [('assign',
+                  'REM',
+                  ('mod', ('val', 'QUOT', 'ID'), ('val', 'B', 'ID'))),
+                 ('assign',
+                  'VAL',
+                  ('binop',
+                   '+',
+                   ('val', 'VAL', 'ID'),
+                   ('binop', '*', ('val', 'REM', 'ID'), ('val', 'POT', 'ID')))),
+                 ('assign',
+                  'QUOT',
+                  ('binop', '/', ('val', 'QUOT', 'ID'), ('val', 'B', 'ID'))),
+                 ('assign',
+                  'POT',
+                  ('binop',
+                   '*',
+                   ('val', 'POT', 'ID'),
+                   ('val', 10, 'INT_CONST'))),
+                 ('goto', 20)],
+                None)),
+              ('assign', 'CONVRT', ('val', 'VAL', 'ID'))]})])

@@ -16,7 +16,7 @@ class SymbolTable():
         return self.__table[id] # Returns the dict {'type': type, 'initialized': bool}
 
   # notice that this allows multiple declarations of the same variable
-    def declare(self, id, var_type):
+    def declare(self, id, var_type, arg_size=None):
         if isinstance(id, tuple) and id[0] == 'array':
             name = id[1]
             if name in self.__table:
@@ -27,11 +27,14 @@ class SymbolTable():
                 'kind': 'array',
                 'size': id[2]
             }
-            return
-
-        if id in self.__table:
-            raise SemanticError(f"Variable {id} already declared")
-        self.__table[id] = {'type': var_type, 'initialized': False, 'kind': 'scalar'}
+            return        
+        
+        if arg_size is None:
+            if id in self.__table:
+                raise SemanticError(f"Variable {id} already declared")
+            self.__table[id] = {'type': var_type, 'initialized': False, 'kind': 'scalar'}
+        else:
+            self.__table[id] = {'type': var_type, 'initialized': False, 'kind': 'scalar', 'arg_size': arg_size}
 
     def initialize(self, id):
         if id not in self.__table:

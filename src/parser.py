@@ -16,12 +16,29 @@ precedence = (
 )
 
 def p_program(p):
-    '''program : PROGRAM ID body END'''
-    p[0] = ('program', p[2], p[3])
+    '''program : PROGRAM ID body END functions'''
+    p[0] = ('program', p[2], p[3], p[5])
 
 def p_body(p):
     '''body : declarations statements'''
     p[0] = {'decls': p[1], 'stmts': p[2]}
+
+def p_functions(p):
+    '''functions : functions function
+                 | empty'''
+    if len(p) == 3:
+        p[0] = p[1] + [p[2]]
+    else:
+        p[0] = []
+
+def p_function(p):
+    '''function : type_spec FUNCTION ID LPAREN arg_list RPAREN body RETURN END'''
+    p[0] = ('function', p[1], p[3], p[5], p[7])
+
+def p_func_arguments(p):
+    '''arg_list : id_list
+                | empty'''
+    p[0] = p[1] if p[1] else []
 
 # --- DECLARAÇÕES ---
 def p_declarations(p):
@@ -164,6 +181,10 @@ def p_expression_list(p):
     else:
         p[0] = [p[1]]
 
+def p_expression_call(p):
+    '''expression : ID LPAREN expression_list RPAREN'''
+    p[0] = ('call', p[1], p[3])
+
 def p_condition(p):
     '''expression : expression EQ expression
                  | expression NE expression
@@ -198,7 +219,7 @@ if __name__ == "__main__":
     f_lexer.build()
     parser = yacc.yacc()
     
-    filepath = "../testFiles/ex4.f"
+    filepath = "../testFiles/ex5.f"
 
     try:
         with open(filepath, 'r') as f:

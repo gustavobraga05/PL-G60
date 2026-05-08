@@ -3,19 +3,35 @@ from symbolTable import SymbolTable, SemanticError
 class SemanticAnalyzer:
     def __init__(self):
         self.symbols = SymbolTable()
+        self.pending_do_labels = set()  # Rótulos de DO loops que esperam um CONTINUE
+        self.labeled_statements = set()  # Rótulos de statements encontrados
 
     def analyze(self, ast):
         if not ast: return
         
         if ast[0] == 'program':
-            self.visit_body(ast[2])
+            for decl in ast[2]['decls']:
+                self.visit_declaration(decl)
+
+            # Declaração de funções
+            for func in ast[3]:
+                _, func_type, func_name, arg_list, body = func
+                self.symbols.declare(func_name, func_type, len(arg_list))
+
+            for stmt in ast[2]['stmts']:
+                self.visit_statement(stmt)
+            
+            # Verificar se todos os DO loops foram fechados com labels correspondentes
+            if self.pending_do_labels:
+                missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
+                raise SemanticError(f"DO loops com rótulos faltantes: {missing_labels}. Cada DO loop deve terminar com um CONTINUE com o rótulo correspondente.")
+                
             
     def visit_body(self, body):
         for decl in body['decls']:
             self.visit_declaration(decl)
             
-        for stmt in body['stmts']:
-            self.visit_statement(stmt)
+        
 
     def visit_declaration(self, decl):
         var_type = decl[1]
@@ -29,6 +45,13 @@ class SemanticAnalyzer:
 
     def visit_statement(self, stmt):
         if stmt[0] == 'labeled':
+            label = stmt[1]
+            self.labeled_statements.add(label)
+            
+            # Verificar se este rótulo fecha um DO loop
+            if label in self.pending_do_labels:
+                self.pending_do_labels.remove(label)
+            
             stmt = stmt[2]
             
         kind = stmt[0]
@@ -95,6 +118,9 @@ class SemanticAnalyzer:
 
     def visit_do(self, stmt):
         _, label, var_id, start_expr, end_expr = stmt
+        
+        # Registar que este DO loop espera um statement com este rótulo
+        self.pending_do_labels.add(label)
         
         entry = self.symbols.lookup(var_id)
         if entry['type'] != 'INTEGER':
@@ -175,6 +201,14 @@ class SemanticAnalyzer:
             if t not in ['INTEGER', 'REAL']:
                 raise SemanticError(f"Operação unária ({op}) requer um valor numérico. Encontrado {t}.")
             return t
+        
+        elif kind == 'call':
+            _, func_name, arg_list = expr
+            entry = self.symbols.lookup(func_name)
+            if len(arg_list) != entry['arg_size']:
+                raise SemanticError(f"Função {func_name} espera {entry['arg_size']} argumentos e recebeu {len(arg_list)}")
+
+            return entry['type']
         
             
         elif kind in ['cond', 'not', 'bool']:

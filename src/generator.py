@@ -6,6 +6,7 @@ class CodeGenerator:
         self.code = []
         self.label_count = 0
         self.do_loops = {}
+        self.func_var_len = {}
 
     def _new_label(self, prefix):
         self.label_count += 1
@@ -19,6 +20,16 @@ class CodeGenerator:
             return []
 
         body = ast[2]
+
+        for func in ast[3]:
+            _, func_type, func_name, arg_list, body_func = func
+            var_len = 0
+
+            decls =  body_func['decls']
+            for decl in decls:
+                for ids in decl[2]:
+                    var_len += 1
+            self.func_var_len[func_name] = var_len
 
         for decl in body["decls"]:
             _, var_type, ids = decl
@@ -47,7 +58,74 @@ class CodeGenerator:
             self.visit_statement(stmt)
 
         self.code.append("STOP")
+
+        for func in ast[3]:
+            self.visit_function(func)
+
         return self.code
+    
+    def visit_function(self, func):
+        _, func_type, func_name, arg_list, body = func
+        self.code.append(f"{func_name}:")
+        
+        # 1. Guardar contexto global para restaurar no fim
+        old_offsets = self.offsets
+        old_types = self.types
+        self.offsets = {} # Usaremos apenas offsets locais aqui dentro
+        self.types = {}
+        self.is_in_func = True # Flag para usar PUSHL/STOREL
+        
+        num_args = len(arg_list)
+
+        # 2. Mapear o Slot de Retorno (Nome da Função)
+        # Ocupa a posição -(n + 1)
+        self.offsets[func_name] = -(num_args + 1)
+        self.types[func_name] = func_type
+
+        # 3. Mapear Argumentos (Offsets Negativos)
+        # Se n=1, arg está em -1. Se n=2, args estão em -2 e -1.
+        for i, arg_name in enumerate(arg_list):
+            # O i-ésimo argumento está em -(num_args - i)
+            self.offsets[arg_name] = -(num_args - i)
+
+        # 4. Mapear Variáveis Locais (Offsets Positivos)
+        local_count = 0
+        for decl in body["decls"]:
+            _, v_type, ids = decl
+            for v_id in ids:
+                name = v_id[1] if isinstance(v_id, tuple) else v_id
+                
+                # Se já está mapeado (é argumento ou o nome da função), apenas definimos o tipo
+                if name in self.offsets:
+                    self.types[name] = v_type
+                    continue
+                
+                # Nova variável local (começa no offset 0)
+                self.offsets[name] = local_count
+                self.types[name] = v_type
+                
+                if isinstance(v_id, tuple) and v_id[0] == 'array':
+                    size = v_id[2][1] if v_id[2][0] == 'val' else 1
+                    local_count += size
+                else:
+                    local_count += 1
+
+        # 5. Reservar espaço para as locais na stack
+        if local_count > 0:
+            self.code.append(f"PUSHN {local_count}")
+
+        # 6. Gerar código para o corpo da função
+        for stmt in body["stmts"]:
+            self.visit_statement(stmt)
+
+        # 7. Finalizar e restaurar contexto
+        self.code.append("RETURN")
+        
+        self.offsets = old_offsets
+        self.types = old_types
+        self.is_in_func = False
+
+
 
     def visit_statement(self, stmt):
         if not stmt:
@@ -76,7 +154,8 @@ class CodeGenerator:
         if stmt_kind == "assign":
             _, var_id, expr = stmt
             self.visit_expression(expr)
-            self.code.append(f"STOREG {self.offsets[var_id]}")
+            instr = "STOREL" if getattr(self, 'is_in_func', False) else "STOREG"
+            self.code.append(f"{instr} {self.offsets[var_id]}")
         
         elif stmt_kind == "array_assign":
             # ARRAY(index) = value
@@ -200,7 +279,8 @@ class CodeGenerator:
                 escaped = str(value).replace('"', '\\"')
                 self.code.append(f"PUSHS \"{escaped}\"")
             elif tok_type == "ID":
-                self.code.append(f"PUSHG {self.offsets[value]}")
+                instr = "PUSHL" if getattr(self, 'is_in_func', False) else "PUSHG"
+                self.code.append(f"{instr} {self.offsets[value]}")
             elif tok_type == "TRUE":
                 self.code.append("PUSHI 1")
             elif tok_type == "FALSE":
@@ -239,6 +319,15 @@ class CodeGenerator:
             # 4. Carregar o valor daquele endereço
             self.code.append("LOAD 0")
             return
+        
+        elif kind == "call":
+            _, func_name, arg_list = expr
+            for arg in arg_list:
+                self.visit_expression(arg)
+
+            self.code.append(f"PUSHA {func_name}")
+            self.code.append("CALL")
+            self.code.append(f"POP {self.func_var_len[func_name]}")
 
         if kind == "binop":
             _, op, left, right = expr
@@ -254,7 +343,9 @@ class CodeGenerator:
                 self.code.append("DIV")
             return
 
-        self.visit_condition(expr)
+        elif kind in ["cond", "not", "bool"]:
+            self.visit_condition(expr)
+            return
 
     def visit_condition(self, cond):
         kind = cond[0]
