@@ -154,9 +154,14 @@ def p_expression_group(p):
     '''expression : LPAREN expression RPAREN'''
     p[0] = p[2]
 
-def p_expression_array(p):
-    '''expression : ID LPAREN expression RPAREN'''
-    p[0] = ('array', p[1], p[3])
+def p_call_args(p):
+    '''call_args : expression_list'''
+    p[0] = p[1]
+
+def p_expression_call_or_array(p):
+    '''expression : ID LPAREN call_args RPAREN'''
+    p[0] = ('call_or_array', p[1], p[3])
+
 
 def p_expression_unary(p):
     '''expression : MINUS expression %prec UMINUS
@@ -181,9 +186,6 @@ def p_expression_list(p):
     else:
         p[0] = [p[1]]
 
-def p_expression_call(p):
-    '''expression : ID LPAREN expression_list RPAREN'''
-    p[0] = ('call', p[1], p[3])
 
 def p_condition(p):
     '''expression : expression EQ expression
