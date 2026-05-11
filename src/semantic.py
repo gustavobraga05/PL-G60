@@ -12,19 +12,18 @@ class SemanticAnalyzer:
         if not ast: return
         
         if ast[0] == 'program':
-            # 1. Processar Declarações de Variáveis
+            # 1. Processar Declarações de Variáveis do programa
             for decl in ast[2]['decls']:
                 self.visit_declaration(decl)
 
-            # 2. Processar Declaração de Funções
+            # 2. Processar Declaração de Funções (apenas registar na symbol table global)
             for func in ast[3]:
                 _, func_type, func_name, arg_list, body = func
                 self.symbols.declare(func_name, func_type, len(arg_list))
 
-            # 3. Processar, Validar e Otimizar Statements (Tudo num só passo)
+            # 3. Processar, Validar e Otimizar Statements do programa
             optimized_stmts = []
             for stmt in ast[2]['stmts']:
-                # visit_statement agora valida a semântica E devolve o nó otimizado
                 new_stmt = self.visit_statement(stmt)
                 optimized_stmts.append(new_stmt)
             
@@ -35,12 +34,58 @@ class SemanticAnalyzer:
             if self.pending_do_labels:
                 missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
                 raise SemanticError(f"DO loops com rótulos faltantes: {missing_labels}.")
+            
+            # 6. Validar semântica de cada função
+            for func in ast[3]:
+                self.analyze_function(func)
                 
-    def visit_body(self, body):
+    
+    def analyze_function(self, func):
+        """Analisa a semântica de uma função com a sua própria symbol table."""
+        _, func_type, func_name, arg_list, body = func
+        
+        # Guardar a symbol table global
+        old_symbols = self.symbols
+        old_do_labels = self.pending_do_labels
+        old_labeled = self.labeled_statements
+        
+        # Criar uma nova symbol table para variáveis locais
+        self.symbols = SymbolTable()
+        self.pending_do_labels = set()
+        self.labeled_statements = set()
+        
+        # Processar declarações locais
         for decl in body['decls']:
             self.visit_declaration(decl)
-            
         
+        # Registar a função (retorno) como variável local com o tipo da função
+        self.symbols.declare(func_name, func_type)
+                
+        # Registar argumentos como variáveis locais inicializadas
+        for arg_name in arg_list:
+            # Argumentos são escalares inicializados
+            self.symbols.initialize(arg_name)
+        
+        
+        # Processar statements do body da função
+        optimized_stmts = []
+        for stmt in body['stmts']:
+            new_stmt = self.visit_statement(stmt)
+            optimized_stmts.append(new_stmt)
+        
+        # Atualizar o body com statements otimizados
+        body['stmts'] = optimized_stmts
+        
+        # Verificar se sobraram DO loops abertos na função
+        if self.pending_do_labels:
+            missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
+            raise SemanticError(f"Na função '{func_name}': DO loops com rótulos faltantes: {missing_labels}.")
+        
+        # Restaurar a symbol table global
+        self.symbols = old_symbols
+        self.pending_do_labels = old_do_labels
+        self.labeled_statements = old_labeled
+            
 
     def visit_declaration(self, decl):
         var_type = decl[1]
@@ -51,6 +96,49 @@ class SemanticAnalyzer:
                 self.symbols.declare(var_id, var_type)
             else:
                 self.symbols.declare(var_id, var_type)
+
+    def resolve_call_or_array(self, expr):
+        _, name, args = expr
+        entry = self.symbols.lookup(name)
+
+        if entry.get('kind') == 'array':
+            if len(args) != 1:
+                raise SemanticError(f"Array '{name}' espera exactamente 1 índice, recebeu {len(args)}.")
+            return ('array', name, args[0])
+
+        if entry.get('kind') == 'function':
+            return ('call', name, args)
+
+        raise SemanticError(f"'{name}' não é nem um array nem uma função.")
+
+    def canonicalize_expression(self, expr):
+        kind = expr[0]
+
+        if kind == 'call_or_array':
+            return self.canonicalize_expression(self.resolve_call_or_array(expr))
+
+        if kind == 'binop':
+            return ('binop', expr[1], self.canonicalize_expression(expr[2]), self.canonicalize_expression(expr[3]))
+
+        if kind == 'unary':
+            return ('unary', expr[1], self.canonicalize_expression(expr[2]))
+
+        if kind == 'mod':
+            return ('mod', self.canonicalize_expression(expr[1]), self.canonicalize_expression(expr[2]))
+
+        if kind == 'array':
+            return ('array', expr[1], self.canonicalize_expression(expr[2]))
+
+        if kind == 'call':
+            return ('call', expr[1], [self.canonicalize_expression(arg) for arg in expr[2]])
+
+        if kind == 'cond':
+            return ('cond', expr[1], self.canonicalize_expression(expr[2]), self.canonicalize_expression(expr[3]))
+
+        if kind == 'not':
+            return ('not', self.canonicalize_expression(expr[1]))
+
+        return expr
 
     def visit_statement(self, stmt):
         if stmt[0] == 'labeled':
@@ -85,6 +173,7 @@ class SemanticAnalyzer:
     def visit_assign(self, stmt):
         _, var_id, expr = stmt
         optimized_expr = fold_constants(expr, self.symbols)
+        optimized_expr = self.canonicalize_expression(optimized_expr)
         entry = self.symbols.lookup(var_id)
         expected_type = entry['type']
         
@@ -134,14 +223,14 @@ class SemanticAnalyzer:
         self.symbols.initialize(name)
 
         # Otimização: tentar dobrar constantes no índice e no valor
-        idx_opt = fold_constants(index_expr, self.symbols)
-        val_opt = fold_constants(value_expr, self.symbols)
+        idx_opt = self.canonicalize_expression(fold_constants(index_expr, self.symbols))
+        val_opt = self.canonicalize_expression(fold_constants(value_expr, self.symbols))
         return ('array_assign', name, idx_opt, val_opt)
     def visit_print(self, stmt):
         _, expr_list = stmt
         new_list = []
         for expr in expr_list:
-            new_expr = fold_constants(expr, self.symbols)
+            new_expr = self.canonicalize_expression(fold_constants(expr, self.symbols))
             # Também valida tipos/uso das variáveis
             self.visit_expression(new_expr)
             new_list.append(new_expr)
@@ -178,20 +267,19 @@ class SemanticAnalyzer:
         
         self.symbols.initialize(var_id)
         
-        start_type = self.visit_expression(start_expr)
-        end_type = self.visit_expression(end_expr)
+        start_opt = self.canonicalize_expression(fold_constants(start_expr, self.symbols))
+        end_opt = self.canonicalize_expression(fold_constants(end_expr, self.symbols))
+        start_type = self.visit_expression(start_opt)
+        end_type = self.visit_expression(end_opt)
         
         if start_type != 'INTEGER' or end_type != 'INTEGER':
             raise SemanticError(f"Os limites do ciclo DO devem ser inteiros. Recebido: {start_type} e {end_type}")
-        # Otimizar limites do DO
-        start_opt = fold_constants(start_expr, self.symbols)
-        end_opt = fold_constants(end_expr, self.symbols)
         return ('do', label, var_id, start_opt, end_opt)
     def visit_if(self, stmt):
         _, cond_expr, then_stmts, else_stmts = stmt
 
         # Dobrar constantes na condição
-        cond_opt = fold_constants(cond_expr, self.symbols)
+        cond_opt = self.canonicalize_expression(fold_constants(cond_expr, self.symbols))
 
         cond_type = self.visit_condition(cond_opt)
         if cond_type != 'LOGICAL':
@@ -208,6 +296,7 @@ class SemanticAnalyzer:
         return ('if', cond_opt, new_then, new_else)
 
     def visit_expression(self, expr):
+        expr = self.canonicalize_expression(expr)
         kind = expr[0]
         
         if kind == 'val':

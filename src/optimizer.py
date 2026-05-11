@@ -75,6 +75,15 @@ def fold_constants(expr: Tuple, symbols) -> Tuple:
             return ('val', new_val, 'INT_CONST')
         return ('mod', left, right)
 
+    if kind == 'array':
+        return ('array', expr[1], fold_constants(expr[2], symbols))
+
+    if kind == 'call_or_array':
+        return ('call_or_array', expr[1], [fold_constants(arg, symbols) for arg in expr[2]])
+
+    if kind == 'call':
+        return ('call', expr[1], [fold_constants(arg, symbols) for arg in expr[2]])
+
     # cond
     if kind == 'cond':
         op = expr[1]

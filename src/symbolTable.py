@@ -45,7 +45,7 @@ class SymbolTable():
             self.__table[id] = {
                 'type': var_type,
                 'initialized': False,
-                'kind': 'scalar',
+                'kind': 'function',
                 'arg_size': arg_size,
                 'const': None,
                 'const_type': None,
