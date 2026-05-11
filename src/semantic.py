@@ -13,22 +13,15 @@ class SemanticAnalyzer:
         
         if ast[0] == 'program':
             # 1. Processar Declarações de Variáveis do programa
-            for decl in ast[2]['decls']:
-                self.visit_declaration(decl)
+            decls = ast[2]['decls']
+            self.declare_variables(decls)
 
             # 2. Processar Declaração de Funções (apenas registar na symbol table global)
-            for func in ast[3]:
-                _, func_type, func_name, arg_list, body = func
-                self.symbols.declare(func_name, func_type, len(arg_list))
+            functions = ast[3]
+            self.declare_functions(functions)
 
             # 3. Processar, Validar e Otimizar Statements do programa
-            optimized_stmts = []
-            for stmt in ast[2]['stmts']:
-                new_stmt = self.visit_statement(stmt)
-                optimized_stmts.append(new_stmt)
-            
-            # 4. Atualizar a AST com a versão otimizada
-            ast[2]['stmts'] = optimized_stmts
+            ast[2]['stmts'] = self.process_stmts(ast[2]['stmts'])
             
             # 5. Verificar se sobraram DO loops abertos
             if self.pending_do_labels:
@@ -43,6 +36,8 @@ class SemanticAnalyzer:
     def analyze_function(self, func):
         """Analisa a semântica de uma função com a sua própria symbol table."""
         _, func_type, func_name, arg_list, body = func
+
+        decls = body['decls']
         
         # Guardar a symbol table global
         old_symbols = self.symbols
@@ -55,8 +50,7 @@ class SemanticAnalyzer:
         self.labeled_statements = set()
         
         # Processar declarações locais
-        for decl in body['decls']:
-            self.visit_declaration(decl)
+        self.declare_variables(decls)
         
         # Registar a função (retorno) como variável local com o tipo da função
         self.symbols.declare(func_name, func_type)
@@ -85,7 +79,23 @@ class SemanticAnalyzer:
         self.symbols = old_symbols
         self.pending_do_labels = old_do_labels
         self.labeled_statements = old_labeled
-            
+
+    def process_stmts(self, stmts):
+        optimized_stmts = []
+        for stmt in stmts:
+            new_stmt = self.visit_statement(stmt)
+            optimized_stmts.append(new_stmt)
+
+        return optimized_stmts
+
+    def declare_variables(self, decls):
+        for decl in decls:
+            self.visit_declaration(decl)
+
+    def declare_functions(self, functions):
+        for func in functions:
+            _, func_type, func_name, arg_list, body = func
+            self.symbols.declare(func_name, func_type, len(arg_list))
 
     def visit_declaration(self, decl):
         var_type = decl[1]
