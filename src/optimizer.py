@@ -9,17 +9,6 @@ from typing import Tuple, Any
 def fold_constants(expr: Tuple, symbols) -> Tuple:
     kind = expr[0]
 
-    if kind == 'val' and expr[2] == 'ID':
-        name = expr[1]
-        try:
-            entry = symbols.lookup(name)
-            const = entry.get('const')
-            const_type = entry.get('const_type')
-            if const is not None:
-                return ('val', const, const_type)
-        except Exception:
-            pass
-
     # binop
     if kind == 'binop':
         op = expr[1]
