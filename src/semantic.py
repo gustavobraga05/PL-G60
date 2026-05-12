@@ -6,11 +6,13 @@ class SemanticAnalyzer:
         self.symbols = SymbolTable()
         self.pending_do_labels = set()  # Rótulos de DO loops que esperam um CONTINUE
         self.labeled_statements = set()  # Rótulos de statements encontrados
+        self.goto_labels = set()  # Rótulos usados em GOTO
 
     def analyze(self, ast):
-    
-        if not ast: return
-        
+        if not ast:
+            return
+        self.goto_labels = set()
+        self.labeled_statements = set()
         if ast[0] == 'program':
             # 1. Processar Declarações de Variáveis do programa
             decls = ast[2]['decls']
@@ -22,12 +24,17 @@ class SemanticAnalyzer:
 
             # 3. Processar, Validar e Otimizar Statements do programa
             ast[2]['stmts'] = self.process_stmts(ast[2]['stmts'])
-            
+
+            # 4. Verificar se todos os GOTO apontam para rótulos existentes
+            undefined = self.goto_labels - self.labeled_statements
+            if undefined:
+                raise SemanticError(f"GOTO para rótulo(s) inexistente(s): {', '.join(str(l) for l in sorted(undefined))}.")
+
             # 5. Verificar se sobraram DO loops abertos
             if self.pending_do_labels:
                 missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
                 raise SemanticError(f"DO loops com rótulos faltantes: {missing_labels}.")
-            
+
             # 6. Validar semântica de cada função
             for func in ast[3]:
                 self.analyze_function(func)
@@ -48,6 +55,7 @@ class SemanticAnalyzer:
         self.symbols = SymbolTable()
         self.pending_do_labels = set()
         self.labeled_statements = set()
+        self.goto_labels = set()
         
         # Processar declarações locais
         self.declare_variables(decls)
@@ -65,16 +73,26 @@ class SemanticAnalyzer:
         optimized_stmts = []
         for stmt in body['stmts']:
             new_stmt = self.visit_statement(stmt)
-            optimized_stmts.append(new_stmt)
+            if new_stmt is None:
+                continue
+            if isinstance(new_stmt, list):
+                optimized_stmts.extend(new_stmt)
+            else:
+                optimized_stmts.append(new_stmt)
         
         # Atualizar o body com statements otimizados
         body['stmts'] = optimized_stmts
         
+        # Verificar se todos os GOTO apontam para rótulos existentes
+        undefined = self.goto_labels - self.labeled_statements
+        if undefined:
+            raise SemanticError(f"Na função '{func_name}': GOTO para rótulo(s) inexistente(s): {', '.join(str(l) for l in sorted(undefined))}.")
+
         # Verificar se sobraram DO loops abertos na função
         if self.pending_do_labels:
             missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
             raise SemanticError(f"Na função '{func_name}': DO loops com rótulos faltantes: {missing_labels}.")
-        
+
         # Restaurar a symbol table global
         self.symbols = old_symbols
         self.pending_do_labels = old_do_labels
@@ -84,7 +102,12 @@ class SemanticAnalyzer:
         optimized_stmts = []
         for stmt in stmts:
             new_stmt = self.visit_statement(stmt)
-            optimized_stmts.append(new_stmt)
+            if new_stmt is None:
+                continue
+            if isinstance(new_stmt, list):
+                optimized_stmts.extend(new_stmt)
+            else:
+                optimized_stmts.append(new_stmt)
 
         return optimized_stmts
 
@@ -154,7 +177,6 @@ class SemanticAnalyzer:
         if stmt[0] == 'labeled':
             label = stmt[1]
             self.labeled_statements.add(label)
-            
             # Verificar se este rótulo fecha um DO loop
             if label in self.pending_do_labels:
                 self.pending_do_labels.remove(label)
@@ -175,6 +197,10 @@ class SemanticAnalyzer:
             return self.visit_do(stmt)
         elif kind == 'if':
             return self.visit_if(stmt)
+        elif kind == 'goto':
+            # ('goto', label)
+            self.goto_labels.add(stmt[1])
+            return stmt
 
         # Por omissão, devolve o stmt inalterado
         return stmt
@@ -236,6 +262,7 @@ class SemanticAnalyzer:
         idx_opt = self.canonicalize_expression(fold_constants(index_expr, self.symbols))
         val_opt = self.canonicalize_expression(fold_constants(value_expr, self.symbols))
         return ('array_assign', name, idx_opt, val_opt)
+    
     def visit_print(self, stmt):
         _, expr_list = stmt
         new_list = []
@@ -285,6 +312,7 @@ class SemanticAnalyzer:
         if start_type != 'INTEGER' or end_type != 'INTEGER':
             raise SemanticError(f"Os limites do ciclo DO devem ser inteiros. Recebido: {start_type} e {end_type}")
         return ('do', label, var_id, start_opt, end_opt)
+    
     def visit_if(self, stmt):
         _, cond_expr, then_stmts, else_stmts = stmt
 
@@ -295,13 +323,51 @@ class SemanticAnalyzer:
         if cond_type != 'LOGICAL':
             raise SemanticError(f"A condição do IF deve ser LOGICAL, recebido: {cond_type}")
 
+        # Se a condição é constante, eliminar código morto
+        if cond_opt[0] == 'val' and (cond_opt[2] in ['TRUE', 'FALSE'] or str(cond_opt[1]).upper() in ['.TRUE.', '.FALSE.']):
+            is_true = True if (cond_opt[2] == 'TRUE' or str(cond_opt[1]).upper() == '.TRUE.') else False
+            if is_true:
+                # Mantém apenas o bloco 'then'
+                new_then = []
+                for s in then_stmts:
+                    r = self.visit_statement(s)
+                    if r is None:
+                        continue
+                    if isinstance(r, list):
+                        new_then.extend(r)
+                    else:
+                        new_then.append(r)
+                if not new_then:
+                    return None
+                return new_then if len(new_then) > 1 else new_then[0]
+            else:
+                # Mantém apenas o bloco 'else' (se existir)
+                if else_stmts:
+                    new_else = []
+                    for s in else_stmts:
+                        r = self.visit_statement(s)
+                        if r is None:
+                            continue
+                        if isinstance(r, list):
+                            new_else.extend(r)
+                        else:
+                            new_else.append(r)
+                    if not new_else:
+                        return None
+                    return new_else if len(new_else) > 1 else new_else[0]
+                else:
+                    # Nenhum código permanece
+                    return None
+
         new_then = []
         for s in then_stmts:
-            new_then.append(self.visit_statement(s))
+            res = self.visit_statement(s)
+            if res is not None:
+                new_then.append(res)
 
         new_else = None
         if else_stmts:
-            new_else = [self.visit_statement(s) for s in else_stmts]
+            new_else = [s for s in (self.visit_statement(s) for s in else_stmts) if s is not None]
 
         return ('if', cond_opt, new_then, new_else)
 

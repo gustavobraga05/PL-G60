@@ -221,7 +221,8 @@ if __name__ == "__main__":
     f_lexer.build()
     parser = yacc.yacc()
     
-    filepath = "../testFiles/ex5.f"
+    # Allow passing a test filepath as first arg, otherwise use default
+    filepath = sys.argv[1] if len(sys.argv) > 1 else "../testFiles/ex5.f"
 
     try:
         with open(filepath, 'r') as f:

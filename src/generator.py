@@ -148,6 +148,7 @@ class CodeGenerator:
         
             self.code.append(f"L{label}:")
             self.visit_statement(stmt[2])
+            return
 
         stmt_kind = stmt[0]
 
