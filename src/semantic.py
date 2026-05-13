@@ -18,7 +18,7 @@ class SemanticAnalyzer:
         # Declarar funções
         self.declare_functions(functions)
 
-
+        #Validar semântica do programa
         if ast[0] is not None:
             self.analyze_program(ast[0])
 
@@ -53,14 +53,7 @@ class SemanticAnalyzer:
 
         decls = body['decls']
         
-        # Guardar a symbol table global
-        old_symbols = self.symbols
-        old_do_labels = self.pending_do_labels
-        old_labeled = self.labeled_statements
-        old_goto_labels = self.goto_labels
-        old_table = self.symbols._SymbolTable__table
-        
-        # Reinicializar apenas a tabela de variáveis locais, mantendo a tabela de funções global
+        # Reinicializar a tabela de variáveis locais, mantendo a tabela de funções global
         self.symbols._SymbolTable__table = {}
         self.pending_do_labels = set()
         self.labeled_statements = set()
@@ -89,12 +82,6 @@ class SemanticAnalyzer:
         if self.pending_do_labels:
             missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
             raise SemanticError(f"Na função '{func_name}': DO loops com rótulos faltantes: {missing_labels}.")
-
-        # Restaurar a tabela de variáveis global
-        self.symbols._SymbolTable__table = old_table
-        self.pending_do_labels = old_do_labels
-        self.labeled_statements = old_labeled
-        self.goto_labels = old_goto_labels
 
     def process_stmts(self, stmts):
         optimized_stmts = []
