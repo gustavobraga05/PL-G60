@@ -1,0 +1,12 @@
+      PROGRAM FUNCOES
+      INTEGER RES
+      INTEGER QUADRADO
+      RES = QUADRADO(7)
+      PRINT *, RES
+      END
+
+      INTEGER FUNCTION QUADRADO(N)
+      INTEGER N
+      QUADRADO = N * N
+      RETURN
+      END

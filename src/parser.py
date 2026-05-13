@@ -227,7 +227,7 @@ if __name__ == "__main__":
     parser = yacc.yacc()
     
     # Allow passing a test filepath as first arg, otherwise use default
-    filepath = sys.argv[1] if len(sys.argv) > 1 else "../testFiles/ex5.f"
+    filepath = sys.argv[1] if len(sys.argv) > 1 else "../testFiles/testes_enunciado/ex5.f"
 
     try:
         with open(filepath, 'r') as f:
