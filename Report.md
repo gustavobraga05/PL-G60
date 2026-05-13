@@ -94,9 +94,14 @@ A gramática cobre as principais construções da linguagem Fortran 77:
 Exemplos de regras gramaticais implementadas:
 
 ```python
+def p_start(p):
+    '''start : program functions'''
+    p[0] = (p[1], p[2])
+
 def p_program(p):
-    '''program : PROGRAM ID body END functions'''
-    p[0] = ('program', p[2], p[3], p[5])
+    '''program : PROGRAM ID body END 
+               | empty'''
+    p[0] = ('program', p[2], p[3])
 
 def p_body(p):
     '''body : declarations statements'''
@@ -129,7 +134,7 @@ precedence = (
 
 ### Árvore Sintática Abstrata (AST)
 
-O parser constrói uma AST que representa a estrutura hierárquica do programa. Por exemplo, o programa:
+O parser constrói uma AST que representa a estrutura hierárquica do programa na seguinte estrutura ( programa, lista de funções). Por exemplo o seguinte programa: 
 
 ```fortran
 PROGRAM TESTE
@@ -141,10 +146,10 @@ END
 Produz a AST:
 
 ```python
-('program', 'TESTE',
+(('program', 'TESTE',
   {'decls': [('decl', 'INTEGER', ['I'])],
-   'stmts': [('assign', 'I', ('binop', '+', ('val', 2, 'INT_CONST'), ('val', 3, 'INT_CONST')))]},
-  [])
+   'stmts': [('assign', 'I', ('binop', '+', ('val', 2, 'INT_CONST'), ('val', 3, 'INT_CONST')))]}),
+[])
 ```
 
 Esta AST serve de base para as fases seguintes de análise semântica e geração de código.
