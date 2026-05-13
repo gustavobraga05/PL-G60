@@ -292,6 +292,7 @@ class SemanticAnalyzer:
                     pass
                 self.symbols.initialize(var_id)
         return stmt
+    
     def visit_do(self, stmt):
         _, label, var_id, start_expr, end_expr = stmt
         
@@ -329,6 +330,7 @@ class SemanticAnalyzer:
             if is_true:
                 # Mantém apenas o bloco 'then'
                 new_then = []
+                #Percorre os statements do bloco 'then'
                 for s in then_stmts:
                     r = self.visit_statement(s)
                     if r is None:
@@ -365,9 +367,12 @@ class SemanticAnalyzer:
             if res is not None:
                 new_then.append(res)
 
-        new_else = None
+        new_else = []
         if else_stmts:
-            new_else = [s for s in (self.visit_statement(s) for s in else_stmts) if s is not None]
+            for s in else_stmts:
+                res = self.visit_statement(s)
+                if res is not None:
+                    new_else.append(res)
 
         return ('if', cond_opt, new_then, new_else)
 
