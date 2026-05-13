@@ -15,13 +15,15 @@ class CodeGenerator:
     def generate(self, ast):
         if not ast:
             return []
+        
+        program, functions = ast
 
-        if ast[0] != "program":
+        if program[0] != "program":
             return []
 
-        body = ast[2]
+        body = program[2]
 
-        for func in ast[3]:
+        for func in functions:
             _, func_type, func_name, arg_list, body_func = func
             var_len = 0
 
@@ -59,7 +61,7 @@ class CodeGenerator:
 
         self.code.append("STOP")
 
-        for func in ast[3]:
+        for func in functions:
             self.visit_function(func)
 
         return self.code

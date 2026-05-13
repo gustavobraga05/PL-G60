@@ -8,6 +8,7 @@ class SyntaxError(Exception):
 class SymbolTable():
     def __init__(self):
         self.__table = {}
+        self.__func_table = {}  # Tabela separada para funções
 
   # if the variable is not declared, raise a semantic error
     def lookup(self, id):
@@ -33,7 +34,8 @@ class SymbolTable():
         
         if arg_size is None:
             if id in self.__table:
-                raise SemanticError(f"Variable {id} already declared")
+                if self.__table[id]['kind'] != 'function':
+                    raise SemanticError(f"Variable {id} already declared")
             self.__table[id] = {
                 'type': var_type,
                 'initialized': False,
@@ -73,3 +75,19 @@ class SymbolTable():
         if id not in self.__table:
             raise SemanticError(f"Undeclared variable: {id}")
         return self.__table[id]['initialized']
+
+    def declare_function(self, func_name, func_type, arg_size):
+        """Declara uma função na tabela separada de funções."""
+        if func_name in self.__func_table:
+            raise SemanticError(f"Função '{func_name}' já foi declarada")
+        self.__func_table[func_name] = {
+            'type': func_type,
+            'kind': 'function',
+            'arg_size': arg_size,
+        }
+
+    def lookup_function(self, func_name):
+        """Procura uma função na tabela separada de funções."""
+        if func_name not in self.__func_table:
+            raise SemanticError(f"Função '{func_name}' não foi declarada")
+        return self.__func_table[func_name]

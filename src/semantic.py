@@ -8,36 +8,43 @@ class SemanticAnalyzer:
         self.labeled_statements = set()  # Rótulos de statements encontrados
         self.goto_labels = set()  # Rótulos usados em GOTO
 
+    # Função de entrada
     def analyze(self, ast):
         if not ast:
             return
-        self.goto_labels = set()
-        self.labeled_statements = set()
-        if ast[0] == 'program':
-            # 1. Processar Declarações de Variáveis do programa
-            decls = ast[2]['decls']
-            self.declare_variables(decls)
+        
+        functions = ast[1]
+        
+        # Declarar funções
+        self.declare_functions(functions)
 
-            # 2. Processar Declaração de Funções (apenas registar na symbol table global)
-            functions = ast[3]
-            self.declare_functions(functions)
 
-            # 3. Processar, Validar e Otimizar Statements do programa
-            ast[2]['stmts'] = self.process_stmts(ast[2]['stmts'])
+        if ast[0] is not None:
+            self.analyze_program(ast[0])
 
-            # 4. Verificar se todos os GOTO apontam para rótulos existentes
-            undefined = self.goto_labels - self.labeled_statements
-            if undefined:
-                raise SemanticError(f"GOTO para rótulo(s) inexistente(s): {', '.join(str(l) for l in sorted(undefined))}.")
+        # 5. Validar semântica de cada função
+        for func in functions:
+            self.analyze_function(func)
 
-            # 5. Verificar se sobraram DO loops abertos
-            if self.pending_do_labels:
-                missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
-                raise SemanticError(f"DO loops com rótulos faltantes: {missing_labels}.")
+    def analyze_program(self, program):
+        _, _, body = program
 
-            # 6. Validar semântica de cada função
-            for func in ast[3]:
-                self.analyze_function(func)
+        # 2. Processar declarações e statements do programa
+        body['stmts'] = self.process_scope(body['decls'], body['stmts'])
+
+        # 3. Verificar se todos os GOTO apontam para rótulos existentes
+        undefined = self.goto_labels - self.labeled_statements
+        if undefined:
+            raise SemanticError(f"GOTO para rótulo(s) inexistente(s): {', '.join(str(l) for l in sorted(undefined))}.")
+
+        # 4. Verificar se sobraram DO loops abertos
+        if self.pending_do_labels:
+            missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
+            raise SemanticError(f"DO loops com rótulos faltantes: {missing_labels}.")
+        
+    def process_scope(self, decls, stmts):
+        self.declare_variables(decls)
+        return self.process_stmts(stmts)
                 
     
     def analyze_function(self, func):
@@ -50,9 +57,11 @@ class SemanticAnalyzer:
         old_symbols = self.symbols
         old_do_labels = self.pending_do_labels
         old_labeled = self.labeled_statements
+        old_goto_labels = self.goto_labels
+        old_table = self.symbols._SymbolTable__table
         
-        # Criar uma nova symbol table para variáveis locais
-        self.symbols = SymbolTable()
+        # Reinicializar apenas a tabela de variáveis locais, mantendo a tabela de funções global
+        self.symbols._SymbolTable__table = {}
         self.pending_do_labels = set()
         self.labeled_statements = set()
         self.goto_labels = set()
@@ -67,22 +76,10 @@ class SemanticAnalyzer:
         for arg_name in arg_list:
             # Argumentos são escalares inicializados
             self.symbols.initialize(arg_name)
-        
-        
-        # Processar statements do body da função
-        optimized_stmts = []
-        for stmt in body['stmts']:
-            new_stmt = self.visit_statement(stmt)
-            if new_stmt is None:
-                continue
-            if isinstance(new_stmt, list):
-                optimized_stmts.extend(new_stmt)
-            else:
-                optimized_stmts.append(new_stmt)
-        
-        # Atualizar o body com statements otimizados
-        body['stmts'] = optimized_stmts
-        
+
+        # Processar declarações e statements do body da função
+        body['stmts'] = self.process_stmts( body['stmts'])
+
         # Verificar se todos os GOTO apontam para rótulos existentes
         undefined = self.goto_labels - self.labeled_statements
         if undefined:
@@ -93,10 +90,11 @@ class SemanticAnalyzer:
             missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
             raise SemanticError(f"Na função '{func_name}': DO loops com rótulos faltantes: {missing_labels}.")
 
-        # Restaurar a symbol table global
-        self.symbols = old_symbols
+        # Restaurar a tabela de variáveis global
+        self.symbols._SymbolTable__table = old_table
         self.pending_do_labels = old_do_labels
         self.labeled_statements = old_labeled
+        self.goto_labels = old_goto_labels
 
     def process_stmts(self, stmts):
         optimized_stmts = []
@@ -118,7 +116,7 @@ class SemanticAnalyzer:
     def declare_functions(self, functions):
         for func in functions:
             _, func_type, func_name, arg_list, body = func
-            self.symbols.declare(func_name, func_type, len(arg_list))
+            self.symbols.declare_function(func_name, func_type, len(arg_list))
 
     def visit_declaration(self, decl):
         var_type = decl[1]
@@ -132,19 +130,26 @@ class SemanticAnalyzer:
 
     def resolve_call_or_array(self, expr):
         _, name, args = expr
+        
+        # Tentar procurar como função primeira
+        try:
+            entry = self.symbols.lookup_function(name)
+            return ('call', name, args)
+        except SemanticError:
+            pass
+        
+        # Se não for função, procurar como variável (array ou scalar)
         entry = self.symbols.lookup(name)
-
         if entry.get('kind') == 'array':
             if len(args) != 1:
                 raise SemanticError(f"Array '{name}' espera exactamente 1 índice, recebeu {len(args)}.")
             return ('array', name, args[0])
 
-        if entry.get('kind') == 'function':
-            return ('call', name, args)
-
         raise SemanticError(f"'{name}' não é nem um array nem uma função.")
+    
 
     def canonicalize_expression(self, expr):
+        """"""
         kind = expr[0]
 
         if kind == 'call_or_array':
@@ -433,7 +438,7 @@ class SemanticAnalyzer:
         
         elif kind == 'call':
             _, func_name, arg_list = expr
-            entry = self.symbols.lookup(func_name)
+            entry = self.symbols.lookup_function(func_name)
             if len(arg_list) != entry['arg_size']:
                 raise SemanticError(f"Função {func_name} espera {entry['arg_size']} argumentos e recebeu {len(arg_list)}")
 

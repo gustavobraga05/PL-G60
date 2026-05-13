@@ -15,9 +15,14 @@ precedence = (
     ('right', 'UMINUS', 'UPLUS'),
 )
 
+def p_start(p):
+    '''start : program functions'''
+    p[0] = (p[1], p[2])
+
 def p_program(p):
-    '''program : PROGRAM ID body END functions'''
-    p[0] = ('program', p[2], p[3], p[5])
+    '''program : PROGRAM ID body END 
+               | empty'''
+    p[0] = ('program', p[2], p[3])
 
 def p_body(p):
     '''body : declarations statements'''
