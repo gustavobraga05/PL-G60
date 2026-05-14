@@ -110,7 +110,7 @@ class SemanticAnalyzer:
         var_list = decl[2]
         
         for var_id in var_list:
-            if isinstance(var_id, tuple) and var_id[0] == 'array':
+            if isinstance(var_id, tuple) and var_id[0] == 'array_decl':
                 self.symbols.declare(var_id, var_type)
             else:
                 self.symbols.declare(var_id, var_type)
@@ -128,9 +128,11 @@ class SemanticAnalyzer:
         # Se não for função, procurar como variável (array ou scalar)
         entry = self.symbols.lookup(name)
         if entry.get('kind') == 'array':
-            if len(args) != 1:
-                raise SemanticError(f"Array '{name}' espera exactamente 1 índice, recebeu {len(args)}.")
-            return ('array', name, args[0])
+            expected = len(entry['dimensions'])
+            received = len(args)
+            if expected != received:
+                raise SemanticError(f"Array '{name}' espera {expected} índice(s), recebeu {received}.")
+            return ('array', name, args)
 
         raise SemanticError(f"'{name}' não é nem um array nem uma função.")
     
@@ -152,7 +154,7 @@ class SemanticAnalyzer:
             return ('mod', self.canonicalize_expression(expr[1]), self.canonicalize_expression(expr[2]))
 
         if kind == 'array':
-            return ('array', expr[1], self.canonicalize_expression(expr[2]))
+            return ('array', expr[1], [self.canonicalize_expression(idx) for idx in expr[2]])
 
         if kind == 'call':
             return ('call', expr[1], [self.canonicalize_expression(arg) for arg in expr[2]])
@@ -225,17 +227,24 @@ class SemanticAnalyzer:
         return ('assign', var_id, optimized_expr)
 
     def visit_array_assign(self, stmt):
-        # ('array_assign', name, index_expr, value_expr)
-        _, name, index_expr, value_expr = stmt
+        # ('array_assign', name, indices, value_expr)
+        _, name, indices, value_expr = stmt
         entry = self.symbols.lookup(name)
         if entry.get('kind') != 'array':
             raise SemanticError(f"'{name}' não é um array.")
         expected_type = entry['type']
         
-        # Check index type
-        idx_type = self.visit_expression(index_expr)
-        if idx_type != 'INTEGER':
-            raise SemanticError(f"Índice de array para '{name}' deve ser INTEGER, recebeu {idx_type}.")
+        expected_dims = len(entry['dimensions'])
+        if len(indices) != expected_dims:
+            raise SemanticError(f"Array '{name}' espera {expected_dims} índice(s), recebeu {len(indices)}.")
+
+        # Check indices type
+        opt_indices = []
+        for index_expr in indices:
+            idx_type = self.visit_expression(index_expr)
+            if idx_type != 'INTEGER':
+                raise SemanticError(f"Índices de array para '{name}' devem ser INTEGER, recebeu {idx_type}.")
+            opt_indices.append(self.canonicalize_expression(fold_constants(index_expr, self.symbols)))
         
         # Check value type
         value_type = self.visit_expression(value_expr)
@@ -250,10 +259,9 @@ class SemanticAnalyzer:
 
         self.symbols.initialize(name)
 
-        # Otimização: tentar dobrar constantes no índice e no valor
-        idx_opt = self.canonicalize_expression(fold_constants(index_expr, self.symbols))
+        # Otimização do valor
         val_opt = self.canonicalize_expression(fold_constants(value_expr, self.symbols))
-        return ('array_assign', name, idx_opt, val_opt)
+        return ('array_assign', name, opt_indices, val_opt)
     
     def visit_print(self, stmt):
         _, expr_list = stmt
@@ -267,15 +275,33 @@ class SemanticAnalyzer:
 
     def visit_read(self, stmt):
         _, id_list = stmt
+        new_list = []
         for var_id in id_list:
-            if isinstance(var_id, tuple) and var_id[0] == 'array':
-                self.symbols.lookup(var_id[1])
-                # Read invalida valores constantes
+            if isinstance(var_id, tuple) and var_id[0] == 'array_decl':
+                # No READ this should be an array access, but parser might produce 'array' if it was ID(args)
+                # Actually p_id_list produces 'array_decl' for INTEGER A(3,3). 
+                # p_read_stmt uses id_list. So READ *, A(I,J) will be 'array_decl' or 'array'?
+                # Wait, p_id_list is used in declarations AND read_stmt.
+                # If it is ID(expression_list) in id_list, it is 'array_decl'.
+                name = var_id[1]
+                indices = var_id[2]
+                entry = self.symbols.lookup(name)
+                if entry.get('kind') != 'array':
+                    raise SemanticError(f"'{name}' não é um array.")
+                
+                # Validate indices
+                opt_indices = []
+                for idx_expr in indices:
+                    if self.visit_expression(idx_expr) != 'INTEGER':
+                        raise SemanticError(f"Índices de '{name}' devem ser INTEGER.")
+                    opt_indices.append(self.canonicalize_expression(fold_constants(idx_expr, self.symbols)))
+                
                 try:
-                    self.symbols.clear_constant(var_id[1])
+                    self.symbols.clear_constant(name)
                 except Exception:
                     pass
-                self.symbols.initialize(var_id[1])
+                self.symbols.initialize(name)
+                new_list.append(('array', name, opt_indices))
             else:
                 self.symbols.lookup(var_id)
                 try:
@@ -283,7 +309,8 @@ class SemanticAnalyzer:
                 except Exception:
                     pass
                 self.symbols.initialize(var_id)
-        return stmt
+                new_list.append(var_id)
+        return ('read', new_list)
     
     def visit_do(self, stmt):
         _, label, var_id, start_expr, end_expr = stmt
@@ -407,13 +434,19 @@ class SemanticAnalyzer:
             return 'INTEGER'
             
         elif kind == 'array':
-            _, name, index = expr
+            _, name, indices = expr
             entry = self.symbols.lookup(name)
             if entry.get('kind') != 'array':
                 raise SemanticError(f"'{name}' não é um array.")
-            idx_type = self.visit_expression(index)
-            if idx_type != 'INTEGER':
-                raise SemanticError(f"Índice de array para '{name}' deve ser INTEGER, recebeu {idx_type}.")
+            
+            expected_dims = len(entry['dimensions'])
+            if len(indices) != expected_dims:
+                raise SemanticError(f"Array '{name}' espera {expected_dims} índice(s), recebeu {len(indices)}.")
+
+            for idx_expr in indices:
+                idx_type = self.visit_expression(idx_expr)
+                if idx_type != 'INTEGER':
+                    raise SemanticError(f"Índices de array para '{name}' devem ser INTEGER, recebeu {idx_type}.")
             return entry['type']
 
         elif kind == 'unary':

@@ -2,7 +2,8 @@ class CodeGenerator:
     def __init__(self):
         self.offsets = {}
         self.types = {}
-        self.kinds = {} # Track kind: scalar, array, array_ref
+        self.kinds = {} 
+        self.shapes = {} 
         self.next_offset = 0
         self.code = []
         self.label_count = 0
@@ -12,6 +13,27 @@ class CodeGenerator:
     def _new_label(self, prefix):
         self.label_count += 1
         return f"{prefix}{self.label_count}"
+
+    def compute_linear_offset_ast(self, indices, shape):
+        """
+        indices: [expr1, expr2, ...]
+        shape: [dim1, dim2, ...]
+        Returns AST: expression that calculates 0-based linear offset
+        """
+        # Formula for row-major: (idx0-1)*d1*d2...*dn + (idx1-1)*d2*...*dn + ... + (idxn-1)
+        # Optimized: (...((idx0-1)*d1 + (idx1-1))*d2 + ...)*dn + (idxn-1)
+        
+        # Start with (idx0 - 1)
+        current_offset_ast = ('binop', '-', indices[0], ('val', 1, 'INT_CONST'))
+        
+        for i in range(1, len(shape)):
+            dim_val = shape[i]
+            next_idx_0_based = ('binop', '-', indices[i], ('val', 1, 'INT_CONST'))
+            
+            mul_expr = ('binop', '*', current_offset_ast, ('val', dim_val, 'INT_CONST'))
+            current_offset_ast = ('binop', '+', mul_expr, next_idx_0_based)
+            
+        return current_offset_ast
 
     def generate(self, ast):
         if not ast:
@@ -43,8 +65,17 @@ class CodeGenerator:
                     if name in arg_names:
                         continue
                     
-                    if isinstance(v_id, tuple) and v_id[0] == 'array':
-                        size = v_id[2][1] if v_id[2][0] == 'val' else 1
+                    if isinstance(v_id, tuple) and v_id[0] == 'array_decl':
+                        # v_id = ('array_decl', name, [dim1, dim2, ...])
+                        dims = []
+                        size = 1
+                        for d_expr in v_id[2]:
+                            if d_expr[0] == 'val' and d_expr[2] == 'INT_CONST':
+                                d = int(d_expr[1])
+                                dims.append(d)
+                                size *= d
+                            else:
+                                dims.append(1)
                         local_count += size
                     else:
                         local_count += 1
@@ -54,16 +85,22 @@ class CodeGenerator:
         for decl in body["decls"]:
             _, var_type, ids = decl
             for var_id in ids:
-                if isinstance(var_id, tuple) and var_id[0] == 'array':
-                    # Array declaration: ('array', name, size_expr)
+                if isinstance(var_id, tuple) and var_id[0] == 'array_decl':
+                    # Array declaration: ('array_decl', name, [dim1, dim2, ...])
                     name = var_id[1]
-                    # Evaluate the size expression (should be INT_CONST for now)
-                    if var_id[2][0] == 'val' and var_id[2][2] == 'INT_CONST':
-                        size = var_id[2][1]
-                    else:
-                        size = 1  # default fallback
+                    dims = []
+                    size = 1
+                    for d_expr in var_id[2]:
+                        if d_expr[0] == 'val' and d_expr[2] == 'INT_CONST':
+                            d = int(d_expr[1])
+                            dims.append(d)
+                            size *= d
+                        else:
+                            dims.append(1)
+                    
                     self.offsets[name] = self.next_offset
                     self.kinds[name] = 'array'
+                    self.shapes[name] = dims
                     self.types[name] = var_type
                     self.next_offset += size
                 else:
@@ -94,9 +131,11 @@ class CodeGenerator:
         old_offsets = self.offsets
         old_types = self.types
         old_kinds = self.kinds
+        old_shapes = self.shapes
         self.offsets = {} # Usaremos apenas offsets locais aqui dentro
         self.types = {}
         self.kinds = {}
+        self.shapes = {}
         self.is_in_func = True # Flag para usar PUSHL/STOREL
         
         num_args = len(arg_list)
@@ -123,22 +162,39 @@ class CodeGenerator:
             for v_id in ids:
                 name = v_id[1] if isinstance(v_id, tuple) else v_id
                 
-                is_array = isinstance(v_id, tuple) and v_id[0] == 'array'
+                is_array_decl = isinstance(v_id, tuple) and v_id[0] == 'array_decl'
 
                 # Se já está mapeado (é argumento ou o nome da função), apenas definimos o tipo e kind
                 if name in self.offsets:
                     self.types[name] = v_type
-                    if is_array:
+                    if is_array_decl:
                         self.kinds[name] = 'array_ref'
+                        # For references, shape might be needed if passed to other funcs, 
+                        # but usually F77 needs it declared.
+                        dims = []
+                        for d_expr in v_id[2]:
+                            if d_expr[0] == 'val' and d_expr[2] == 'INT_CONST':
+                                dims.append(int(d_expr[1]))
+                            else: dims.append(1)
+                        self.shapes[name] = dims
                     continue
                 
                 # Nova variável local (começa no offset 0)
                 self.offsets[name] = local_count
                 self.types[name] = v_type
                 
-                if is_array:
+                if is_array_decl:
                     self.kinds[name] = 'array'
-                    size = v_id[2][1] if v_id[2][0] == 'val' else 1
+                    dims = []
+                    size = 1
+                    for d_expr in v_id[2]:
+                        if d_expr[0] == 'val' and d_expr[2] == 'INT_CONST':
+                            d = int(d_expr[1])
+                            dims.append(d)
+                            size *= d
+                        else:
+                            dims.append(1)
+                    self.shapes[name] = dims
                     local_count += size
                 else:
                     self.kinds[name] = 'scalar'
@@ -158,6 +214,7 @@ class CodeGenerator:
         self.offsets = old_offsets
         self.types = old_types
         self.kinds = old_kinds
+        self.shapes = old_shapes
         self.is_in_func = False
 
 
@@ -196,11 +253,12 @@ class CodeGenerator:
             self.code.append(f"{instr} {self.offsets[var_id]}")
         
         elif stmt_kind == "array_assign":
-            # ARRAY(index) = value
-            _, name, index_expr, value_expr = stmt
+            # ARRAY(idx1, idx2, ...) = value
+            _, name, indices, value_expr = stmt
             
             kind = self.kinds[name]
             offset = self.offsets[name]
+            shape = self.shapes[name]
 
             if kind == 'array_ref':
                 # Array passed by reference: address is in the local variable
@@ -212,10 +270,9 @@ class CodeGenerator:
                 self.code.append(f"PUSHI {offset}")
                 self.code.append("PADD")
             
-            # 3. Calcular o índice (1-based to 0-based) e somar ao ponteiro
-            self.visit_expression(index_expr)
-            self.code.append("PUSHI 1")
-            self.code.append("SUB")
+            # 3. Calcular o índice linearizado (Row-Major) e somar ao ponteiro
+            linear_ast = self.compute_linear_offset_ast(indices, shape)
+            self.visit_expression(linear_ast)
             self.code.append("PADD")
             
             # 4. Calcular o valor a ser guardado
@@ -241,10 +298,11 @@ class CodeGenerator:
             _, id_list = stmt
             for var_id in id_list:
                 if isinstance(var_id, tuple) and var_id[0] == 'array':
-                    _, name, index_expr = var_id
+                    _, name, indices = var_id
                     
                     kind = self.kinds[name]
                     offset = self.offsets[name]
+                    shape = self.shapes[name]
 
                     if kind == 'array_ref':
                         self.code.append(f"PUSHL {offset}")
@@ -254,9 +312,8 @@ class CodeGenerator:
                         self.code.append(f"PUSHI {offset}")
                         self.code.append("PADD")
 
-                    self.visit_expression(index_expr)
-                    self.code.append("PUSHI 1")
-                    self.code.append("SUB")
+                    linear_ast = self.compute_linear_offset_ast(indices, shape)
+                    self.visit_expression(linear_ast)
                     self.code.append("PADD")
                     
                     # 2. Lê o valor
@@ -371,10 +428,11 @@ class CodeGenerator:
             return
 
         elif kind == "array":
-            _, name, index_expr = expr
+            _, name, indices = expr
             
             kind = self.kinds[name]
             offset = self.offsets[name]
+            shape = self.shapes[name]
 
             if kind == 'array_ref':
                 self.code.append(f"PUSHL {offset}")
@@ -384,10 +442,9 @@ class CodeGenerator:
                 self.code.append(f"PUSHI {offset}")
                 self.code.append("PADD")
             
-            # 3. Somar o índice (1-based to 0-based)
-            self.visit_expression(index_expr)
-            self.code.append("PUSHI 1")
-            self.code.append("SUB")
+            # 3. Somar o índice linearizado (Row-Major)
+            linear_ast = self.compute_linear_offset_ast(indices, shape)
+            self.visit_expression(linear_ast)
             self.code.append("PADD")
             
             # 4. Carregar o valor daquele endereço

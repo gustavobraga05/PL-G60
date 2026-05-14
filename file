@@ -1,0 +1,107 @@
+ PUSHN 12                                                                                 
+ PUSHS "PREENCHENDO MATRIZ 3X3:"                                                          
+ WRITES                                                                                   
+ WRITELN                                                                                  
+ PUSHI 1                                                                                  
+ STOREG 9                                                                                 
+ DOSTART1:                                                                                
+ PUSHG 9                                                                                  
+ PUSHI 3                                                                                  
+ INFEQ                                                                                    
+ JZ DOEND2                                                                                
+ PUSHI 1                                                                                  
+ STOREG 10                                                                                
+ DOSTART3:                                                                                
+ PUSHG 10                                                                                 
+ PUSHI 3                                                                                  
+ INFEQ                                                                                    
+ JZ DOEND4                                                                                
+ PUSHGP                                                                                   
+ PUSHI 0                                                                                  
+ PADD                                                                                     
+ PUSHG 9                                                                                  
+ PUSHI 1                                                                                  
+ SUB                                                                                      
+ PUSHI 3                                                                                  
+ MUL                                                                                      
+ PUSHG 10                                                                                 
+ PUSHI 1                                                                                  
+ SUB                                                                                      
+ ADD                                                                                      
+ PADD                                                                                     
+ PUSHG 9                                                                                  
+ PUSHI 10                                                                                 
+ MUL                                                                                      
+ PUSHG 10                                                                                 
+ ADD                                                                                      
+ STORE 0                                                                                  
+ PUSHG 10                                                                                 
+ PUSHI 1                                                                                  
+ ADD                                                                                      
+ STOREG 10                                                                                
+ JUMP DOSTART3                                                                            
+ DOEND4:                                                                                  
+ PUSHG 9                                                                                  
+ PUSHI 1                                                                                  
+ ADD                                                                                      
+ STOREG 9                                                                                 
+ JUMP DOSTART1                                                                            
+ DOEND2:                                                                                  
+ PUSHS "CONTEUDO DA MATRIZ:"                                                              
+ WRITES                                                                                   
+ WRITELN                                                                                  
+ PUSHI 1                                                                                  
+ STOREG 9                                                                                 
+ DOSTART5:                                                                                
+ PUSHG 9                                                                                  
+ PUSHI 3                                                                                  
+ INFEQ                                                                                    
+ JZ DOEND6                                                                                
+ PUSHI 1                                                                                  
+ STOREG 10                                                                                
+ DOSTART7:                                                                                
+ PUSHG 10                                                                                 
+ PUSHI 3                                                                                  
+ INFEQ                                                                                    
+ JZ DOEND8                                                                                
+ PUSHGP                                                                                   
+ PUSHI 0                                                                                  
+ PADD                                                                                     
+ PUSHG 9                                                                                  
+ PUSHI 1                                                                                  
+ SUB                                                                                      
+ PUSHI 3                                                                                  
+ MUL                                                                                      
+ PUSHG 10                                                                                 
+ PUSHI 1                                                                                  
+ SUB                                                                                      
+ ADD                                                                                      
+ PADD                                                                                     
+ LOAD 0                                                                                   
+ STOREG 11                                                                                
+ PUSHS "M("                                                                               
+ WRITES                                                                                   
+ PUSHG 9                                                                                  
+ WRITEI                                                                                   
+ PUSHS ","                                                                                
+ WRITES                                                                                   
+ PUSHG 10                                                                                 
+ WRITEI                                                                                   
+ PUSHS ") = "                                                                             
+ WRITES                                                                                   
+ PUSHG 11                                                                                 
+ WRITEI                                                                                   
+ WRITELN                                                                                  
+ PUSHG 10                                                                                 
+ PUSHI 1                                                                                  
+ ADD                                                                                      
+ STOREG 10                                                                                
+ JUMP DOSTART7                                                                            
+ DOEND8:                                                                                  
+ PUSHG 9                                                                                  
+ PUSHI 1                                                                                  
+ ADD                                                                                      
+ STOREG 9                                                                                 
+ JUMP DOSTART5                                                                            
+ DOEND6:                                                                                  
+ STOP

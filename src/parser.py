@@ -66,15 +66,15 @@ def p_type_spec(p):
 
 def p_id_list(p):
     '''id_list : id_list COMMA ID
-               | id_list COMMA ID LPAREN expression RPAREN
-               | ID LPAREN expression RPAREN
+               | id_list COMMA ID LPAREN expression_list RPAREN
+               | ID LPAREN expression_list RPAREN
                | ID'''
     if len(p) == 4:
         p[0] = p[1] + [p[3]]
     elif len(p) == 7:
-        p[0] = p[1] + [('array', p[3], p[5])]
+        p[0] = p[1] + [('array_decl', p[3], p[5])]
     elif len(p) == 5:
-        p[0] = [('array', p[1], p[3])]
+        p[0] = [('array_decl', p[1], p[3])]
     else:
         p[0] = [p[1]]
 
@@ -108,11 +108,11 @@ def p_unlabeled_stmt(p):
 
 def p_assignment(p):
     '''assignment : ID ASSIGN expression
-                  | ID LPAREN expression RPAREN ASSIGN expression'''
+                  | ID LPAREN expression_list RPAREN ASSIGN expression'''
     if len(p) == 4:
         p[0] = ('assign', p[1], p[3])
     else:
-        # Array assignment: ARRAY(index) = value
+        # Array assignment: ARRAY(index1, index2, ...) = value
         p[0] = ('array_assign', p[1], p[3], p[6])
 
 def p_print_stmt(p):
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     parser = yacc.yacc()
     
     # Allow passing a test filepath as first arg, otherwise use default
-    filepath = sys.argv[1] if len(sys.argv) > 1 else "../testFiles/testes_enunciado/ex5.f"
+    filepath = sys.argv[1] if len(sys.argv) > 1 else "../testFiles/testes_enunciado/ex3.f"
 
     try:
         with open(filepath, 'r') as f:

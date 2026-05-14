@@ -85,7 +85,8 @@ A análise sintática é a segunda etapa do processo de compilação. Tem como o
 
 A gramática cobre as principais construções da linguagem Fortran 77:
 
-- Declarações de variáveis (`INTEGER`, `REAL`, `LOGICAL`) e arrays.
+- Declarações de variáveis (`INTEGER`, `REAL`, `LOGICAL`) e arrays (unidimensionais e multidimensionais).
+- Atribuições e acessos a arrays com suporte a múltiplos índices (ex: `M(I,J) = VAL`).
 - Funções com lista de argumentos e valor de retorno tipado.
 - Comandos de controlo de fluxo: `IF/THEN/ELSE/ENDIF`, `DO/CONTINUE`, `GOTO`.
 - Comandos de I/O: `READ` e `PRINT`.
@@ -167,20 +168,23 @@ A implementação encontra-se no ficheiro `semantic.py`, com recurso à tabela d
 - **Declaração e uso de variáveis:** Verifica duplicação de identificadores e uso de variáveis não declaradas. Uma variável usada sem declaração prévia lança um `SemanticError`.
 - **Verificação de tipos:** Garante compatibilidade entre tipos em atribuições, operações aritméticas e chamadas de funções.
 - **Validação de condições:** Confirma que condições em `IF` e `DO` são do tipo booleano, e que variáveis de controlo de ciclos são inteiras.
+- **Validação de Matrizes:** Verifica se o número de índices fornecido em acessos ou atribuições coincide com o número de dimensões declaradas, e se todos os índices são do tipo `INTEGER`.
 - **Gestão de escopos:** Cada função possui a sua própria tabela de símbolos, isolando variáveis locais das globais.
 - **Gestão de rótulos:** Valida a existência e correspondência correta de rótulos para comandos `DO` e `CONTINUE`.
 - **Otimizações:** Aplica constant folding e propagação de constantes através do módulo `optimizer.py` durante a travessia da AST.
 
 ### Tabela de símbolos
 
-Cada entrada na tabela de símbolos contém:
+Cada entrada na tabela de símbolos para um array contém:
 
 ```python
 {
     'type': 'INTEGER',       # Tipo da variável
     'initialized': False,    # Se já foi atribuída
-    'kind': 'scalar',        # 'scalar', 'array' ou 'function'
-    'const': None,           # Valor constante (para constant propagation)
+    'kind': 'array',         # 'scalar', 'array' ou 'function'
+    'shape': [3, 3],         # Dimensões da matriz (ex: M(3,3))
+    'total_size': 9,         # Tamanho total (produto das dimensões)
+    'const': None,           
     'const_type': None,
 }
 ```
@@ -231,26 +235,7 @@ PUSHI 1
 STOREG 0
 ```
 
-### 7.2 Constant Propagation
-
-Quando uma variável é inicializada com um valor constante e não é modificada entretanto, o seu valor pode ser substituído diretamente nas expressões seguintes.
-
-**Exemplo:**
-
-```fortran
-INTEGER N
-N = 5
-X = N * 2
-```
-
-Após constant propagation, `N` é substituído por `5`:
-
-```
-PUSHI 10   ! resultado de 5 * 2 avaliado em compilação
-STOREG 1
-```
-
-### 7.3 Otimização de Condições
+### 7.2 Otimização de Condições
 
 Expressões condicionais com operandos constantes são avaliadas em tempo de compilação.
 
@@ -262,7 +247,7 @@ IF (3 .GT. 1) THEN ...
 
 A condição `3 .GT. 1` é sempre verdadeira, sendo substituída por `.TRUE.` na AST, eliminando o salto condicional no código gerado.
 
-### 7.4 Otimização de NOT
+### 7.3 Otimização de NOT
 
 Expressões `.NOT.` sobre valores booleanos constantes são invertidas diretamente.
 
@@ -273,7 +258,7 @@ Expressões `.NOT.` sobre valores booleanos constantes são invertidas diretamen
 ```
 
 
-### 7.5 Eliminação de Código Morto
+### 7.4 Eliminação de Código Morto
  
 A eliminação de código morto (*dead code elimination*) é aplicada durante a análise semântica, no método `visit_if` do `SemanticAnalyzer`. Quando a condição de um `IF` é avaliada como uma constante booleana em tempo de compilação, o bloco que nunca será executado é removido diretamente da AST, sem gerar qualquer instrução para ele.
  
@@ -355,7 +340,7 @@ ENDIF
  
 A constant propagation substitui `FLAG` por `0`, o constant folding avalia `0 .EQ. 1` como `.FALSE.`, e a eliminação de código morto remove o bloco `THEN` inteiramente.
  
-### 7.6 Limitações das Otimizações
+### 7.5 Limitações das Otimizações
  
 As otimizações implementadas têm algumas limitações relevantes:
  
@@ -374,8 +359,6 @@ A implementação encontra-se no ficheiro `generator.py`, utilizando o padrão d
 ### Principais características
 
 **Gestão de memória:** As variáveis globais são alocadas em endereços fixos (via `PUSHG`/`STOREG`), enquanto as variáveis locais de funções usam endereços relativos à frame atual (via `PUSHL`/`STOREL`). O gerador mantém um dicionário `offsets` para mapear cada identificador ao seu endereço.
-
-**Arrays:** Os arrays são alocados num bloco contíguo de memória. O acesso é feito calculando o endereço base com `PUSHGP` e somando o offset com `PADD`.
 
 **Funções:** O gerador cria um prólogo para cada função que: mapeia os argumentos com offsets negativos em relação ao topo da frame, reserva espaço para variáveis locais com `PUSHN`, e termina com `RETURN`. O slot de retorno (nome da função) é mapeado para `-(n+1)`, onde `n` é o número de argumentos.
 
@@ -420,24 +403,37 @@ WRITELN
 STOP
 ```
 
-### Geração de código para arrays
+### Suporte a Matrizes e Linearização
 
-```fortran
-INTEGER V(5)
-V(2) = 99
+O compilador suporta arrays multidimensionais (matrizes) de qualquer dimensão. Como a memória da máquina virtual (EWVM) é linear, o compilador implementa a estratégia de **Row-Major Linearization** para mapear os múltiplos índices para um único offset de memória.
+
+**Fórmula de Linearização:**
+Para uma matriz $M(d_0, d_1, \dots, d_n)$, o offset para um acesso $M(i_0, i_1, \dots, i_n)$ é calculado como:
+$Offset = (\dots((i_0-1) \times d_1 + (i_1-1)) \times d_2 + \dots ) \times d_n + (i_n-1)$
+
+O gerador de código constrói dinamicamente uma sub-árvore AST que realiza este cálculo em tempo de execução, garantindo que o endereço correto seja acedido.
+
+**Exemplo de Código Gerado:**
+Para um acesso `M(I,J)` em uma matriz `INTEGER M(3,3)`, o compilador gera:
+
 ```
-
-Gera:
-
-```
-PUSHGP
-PUSHI <offset_base_de_V>
+PUSHGP          # Base da memória
+PUSHI <offset_M> # Offset inicial de M
 PADD
-PUSHI 2        ! índice
-PADD
-PUSHI 99
-STORE 0
+PUSHG I         # Cálculo do índice linearizado:
+PUSHI 1         # (I - 1)
+SUB
+PUSHI 3         # * ncols (d1)
+MUL
+PUSHG J         # + (J - 1)
+PUSHI 1
+SUB
+ADD
+PADD            # Soma offset ao ponteiro base
+LOAD 0          # Carrega o valor
 ```
+
+A reserva de memória (instrução `PUSHN`) também é atualizada para considerar o `total_size` linearizado da matriz, garantindo espaço suficiente para todos os elementos.
 
 ---
 
@@ -447,7 +443,7 @@ O desenvolvimento deste compilador para Fortran permitiu consolidar e aplicar os
 
 A análise léxica, com recurso ao PLY, mostrou-se adequada para lidar com as particularidades do Fortran, como a insensibilidade a maiúsculas/minúsculas, a distinção contextual de rótulos e a interpretação do operador `*` em contextos diferentes.
 
-A análise sintática cobriu as principais construções da linguagem Fortran 77, produzindo uma AST que serve de interface limpa entre o front-end e o back-end do compilador. A análise semântica assegurou a correção lógica dos programas através de validações de tipos, escopos e uso de variáveis.
+A análise sintática cobriu as principais construções da linguagem Fortran 77, produzindo uma AST que serve de interface limpa entre o front-end e o back-end do compilador. A análise semântica assegurou a correção lógica dos programas através de validações de tipos, escopos e uso de variáveis. O recente suporte a **matrizes multidimensionais** expandiu significativamente a capacidade de processamento de dados do compilador, utilizando técnicas robustas de linearização de memória.
 
 O módulo de otimizações, com constant folding e propagação de constantes, permitiu reduzir o número de instruções geradas em casos comuns, melhorando a eficiência do código produzido. No entanto, as otimizações implementadas têm um âmbito local e não contemplam análise de fluxo de controlo, eliminação de código morto ou otimizações inter-procedurais — aspetos que poderiam ser explorados em trabalho futuro.
 

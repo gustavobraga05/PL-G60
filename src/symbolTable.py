@@ -18,15 +18,30 @@ class SymbolTable():
 
   # notice that this allows multiple declarations of the same variable
     def declare(self, id, var_type, arg_size=None):
-        if isinstance(id, tuple) and id[0] == 'array':
+        if isinstance(id, tuple) and id[0] == 'array_decl':
             name = id[1]
+            dim_exprs = id[2] # List of expressions
             if name in self.__table:
                 raise SemanticError(f"Variable {name} already declared")
+            
+            # For simplicity, assume dimensions are constant during declaration
+            dimensions = []
+            total_size = 1
+            for dim_expr in dim_exprs:
+                if dim_expr[0] == 'val' and dim_expr[2] == 'INT_CONST':
+                    d = int(dim_expr[1])
+                    dimensions.append(d)
+                    total_size *= d
+                else:
+                    # Fallback or complex F77 arg dimensions
+                    dimensions.append(1)
+            
             self.__table[name] = {
                 'type': var_type,
                 'initialized': False,
                 'kind': 'array',
-                'size': id[2],
+                'dimensions': dimensions,
+                'total_size': total_size,
                 'const': None,
                 'const_type': None,
             }
