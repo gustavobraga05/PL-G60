@@ -54,6 +54,9 @@ class SymbolTable():
             }
 
     def initialize(self, id):
+        if isinstance(id, tuple):
+            id = id[1]
+
         if id not in self.__table:
             raise SemanticError(f"Undeclared variable: {id}")
         self.__table[id]['initialized'] = True
