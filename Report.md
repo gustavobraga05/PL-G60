@@ -408,7 +408,7 @@ STOP
 O compilador suporta arrays multidimensionais (matrizes) de qualquer dimensão. Como a memória da máquina virtual (EWVM) é linear, o compilador implementa a estratégia de **Row-Major Linearization** para mapear os múltiplos índices para um único offset de memória.
 
 **Fórmula de Linearização:**
-Para uma matriz $M(d_0, d_1, \dots, d_n)$, o offset para um acesso $M(i_0, i_1, \dots, i_n)$ é calculado como:
+Para uma matriz $M(d_n)$, o offset para um acesso $M(i_0, i_1, \dots, i_n)$ é calculado como:
 $Offset = (\dots((i_0-1) \times d_1 + (i_1-1)) \times d_2 + \dots ) \times d_n + (i_n-1)$
 
 O gerador de código constrói dinamicamente uma sub-árvore AST que realiza este cálculo em tempo de execução, garantindo que o endereço correto seja acedido.

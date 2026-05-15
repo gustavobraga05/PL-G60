@@ -9,8 +9,6 @@ def parse_expectations(md_path):
     with open(md_path, 'r', encoding='utf-8') as f:
         content = f.read()
     
-    # Simple regex to extract table rows
-    # | 1 | `correct_01_basic_arithmetic.f` | ✅ Correto | ... |
     rows = re.findall(r'\|\s*\d+\s*\|\s*`([^`]+)`\s*\|\s*([^|]+)\s*\|', content)
     for filename, result_type in rows:
         expectations[filename.strip()] = result_type.strip()
@@ -19,20 +17,18 @@ def parse_expectations(md_path):
 def run_test(file_path):
     cmd = ["python3", "src/parser.py", file_path]
     try:
-        # We need to run from the root, and parser.py seems to handle paths relative to where it's called or absolute
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         output = result.stdout
         error_output = result.stderr
 
         combined_output = output + error_output
         
-        # Check if VM code is present
+        # Check if VM cde is present
         if "----- Código -----" in combined_output:
             parts = combined_output.split("----- Código -----")
             if len(parts) > 1 and parts[1].strip():
                 return "✅ Correto", parts[1].strip()
         
-        # Check for errors
         if "❌ Erro Semântico" in combined_output:
             err_msg = re.search(r"❌ Erro Semântico: (.*)", combined_output)
             return "❌ Erro Semântico", err_msg.group(1).strip() if err_msg else "Erro Semântico detectado"
@@ -86,20 +82,20 @@ def main():
         status_str = "✅ PASSOU" if is_ok else "❌ FALHOU"
         if is_ok: passed += 1
             
-        print(f"\n📄 Ficheiro: {filename}")
-        print(f"   🎯 Esperado: {expected}")
-        print(f"   🔍 Obtido:   {result_type}")
-        print(f"   📊 Status:   {status_str}")
+        print(f"\n Ficheiro: {filename}")
+        print(f"    Esperado: {expected}")
+        print(f"    Obtido:   {result_type}")
+        print(f"    Status:   {status_str}")
         
         if result_type == "✅ Correto":
-            print("   💻 Código VM Gerado:")
+            print("   Código VM Gerado:")
             vm_lines = detail.split('\n')
             for line in vm_lines[:15]: # Show up to 15 lines
                 print(f"      {line}")
             if len(vm_lines) > 15:
                 print(f"      ... ({len(vm_lines)-15} mais linhas)")
         else:
-            print(f"   ⚠️  Mensagem: {detail}")
+            print(f"     Mensagem: {detail}")
         print("-" * 40)
 
     print("\n" + "=" * 80)

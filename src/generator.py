@@ -16,14 +16,9 @@ class CodeGenerator:
 
     def compute_linear_offset_ast(self, indices, shape):
         """
-        indices: [expr1, expr2, ...]
-        shape: [dim1, dim2, ...]
-        Returns AST: expression that calculates 0-based linear offset
+        Função utilizada para calcular o offset 
         """
-        # Formula for row-major: (idx0-1)*d1*d2...*dn + (idx1-1)*d2*...*dn + ... + (idxn-1)
-        # Optimized: (...((idx0-1)*d1 + (idx1-1))*d2 + ...)*dn + (idxn-1)
-        
-        # Start with (idx0 - 1)
+
         current_offset_ast = ('binop', '-', indices[0], ('val', 1, 'INT_CONST'))
         
         for i in range(1, len(shape)):
@@ -91,12 +86,10 @@ class CodeGenerator:
                     dims = []
                     size = 1
                     for d_expr in var_id[2]:
-                        if d_expr[0] == 'val' and d_expr[2] == 'INT_CONST':
-                            d = int(d_expr[1])
-                            dims.append(d)
-                            size *= d
-                        else:
-                            dims.append(1)
+                        d = int(d_expr[1])
+                        dims.append(d)
+                        size *= d
+                        
                     
                     self.offsets[name] = self.next_offset
                     self.kinds[name] = 'array'
@@ -253,7 +246,6 @@ class CodeGenerator:
             self.code.append(f"{instr} {self.offsets[var_id]}")
         
         elif stmt_kind == "array_assign":
-            # ARRAY(idx1, idx2, ...) = value
             _, name, indices, value_expr = stmt
             
             kind = self.kinds[name]
@@ -261,16 +253,14 @@ class CodeGenerator:
             shape = self.shapes[name]
 
             if kind == 'array_ref':
-                # Array passed by reference: address is in the local variable
                 self.code.append(f"PUSHL {offset}")
             else:
-                # Global or Local array
                 instr_p = "PUSHFP" if getattr(self, 'is_in_func', False) else "PUSHGP"
                 self.code.append(instr_p)
                 self.code.append(f"PUSHI {offset}")
                 self.code.append("PADD")
             
-            # 3. Calcular o índice linearizado (Row-Major) e somar ao ponteiro
+            # 3. Calcular o índice linearizado e somar ao ponteiro
             linear_ast = self.compute_linear_offset_ast(indices, shape)
             self.visit_expression(linear_ast)
             self.code.append("PADD")
