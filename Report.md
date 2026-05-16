@@ -260,7 +260,7 @@ Expressões `.NOT.` sobre valores booleanos constantes são invertidas diretamen
 
 ### 7.4 Eliminação de Código Morto
  
-A eliminação de código morto (*dead code elimination*) é aplicada durante a análise semântica, no método `visit_if` do `SemanticAnalyzer`. Quando a condição de um `IF` é avaliada como uma constante booleana em tempo de compilação, o bloco que nunca será executado é removido diretamente da AST, sem gerar qualquer instrução para ele.
+A eliminação de código morto é aplicada durante a análise semântica, no método `visit_if` do `SemanticAnalyzer`. Quando a condição de um `IF` é avaliada como uma constante booleana em tempo de compilação, o bloco que nunca será executado é removido diretamente da AST, sem gerar qualquer instrução para ele.
  
 A lógica funciona da seguinte forma:
  
@@ -275,7 +275,7 @@ if cond_opt[0] == 'val' and (cond_opt[2] in ['TRUE', 'FALSE'] or ...):
         return new_else if else_stmts else None
 ```
  
-Esta otimização trabalha em conjunto com o constant folding — primeiro o constant folding avalia a condição para `.TRUE.` ou `.FALSE.`, e só depois o eliminador de código morto decide qual o ramo a manter.
+Esta otimização trabalha em conjunto com o constant folding, primeiro o constant folding avalia a condição para `.TRUE.` ou `.FALSE.`, e só depois o eliminador de código morto decide qual o ramo a manter.
  
 **Exemplo — condição sempre verdadeira:**
  
@@ -445,7 +445,7 @@ A análise léxica, com recurso ao PLY, mostrou-se adequada para lidar com as pa
 
 A análise sintática cobriu as principais construções da linguagem Fortran 77, produzindo uma AST que serve de interface limpa entre o front-end e o back-end do compilador. A análise semântica assegurou a correção lógica dos programas através de validações de tipos, escopos e uso de variáveis. O recente suporte a **matrizes multidimensionais** expandiu significativamente a capacidade de processamento de dados do compilador, utilizando técnicas robustas de linearização de memória.
 
-O módulo de otimizações, com constant folding e propagação de constantes, permitiu reduzir o número de instruções geradas em casos comuns, melhorando a eficiência do código produzido. No entanto, as otimizações implementadas têm um âmbito local e não contemplam análise de fluxo de controlo, eliminação de código morto ou otimizações inter-procedurais — aspetos que poderiam ser explorados em trabalho futuro.
+O módulo de otimizações, com constant folding, permitiu reduzir o número de instruções geradas em casos comuns, melhorando a eficiência do código produzido. No entanto, as otimizações implementadas têm um âmbito local e não contemplam análise de fluxo de controlo, eliminação de código morto ou otimizações inter-procedurais — aspetos que poderiam ser explorados em trabalho futuro.
 
 A geração de código para uma máquina virtual baseada em pilha revelou-se uma escolha adequada para este projeto, simplificando a tradução de expressões e a gestão de memória. A distinção entre variáveis globais e locais, a gestão de frames de função e o suporte a arrays constituíram os principais desafios desta fase.
 
