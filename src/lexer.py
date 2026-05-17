@@ -2,7 +2,7 @@ import ply.lex as lex
 import re
 
 class FortranLexer:
-    # 1. Definição de Palavras Reservadas (Case-Insensitive)
+    # Definição de Palavras Reservadas (Case-Insensitive)
     reserved = {
         'program': 'PROGRAM',
         'end': 'END',
@@ -26,7 +26,7 @@ class FortranLexer:
         'mod': 'MOD'
     }
 
-    # 2. Lista Completa de Tokens
+    # Lista Completa de Tokens
     tokens = [
         'ID', 'LABEL', 'INT_CONST', 'REAL_CONST', 'STRING_CONST',
         'PLUS', 'MINUS', 'TIMES', 'DIVIDE', 'POWER', 'ASSIGN',
@@ -36,7 +36,7 @@ class FortranLexer:
         'NEWLINE'
     ] + list(reserved.values())
 
-    # 3. Expressões Regulares Simples
+    # Expressões Regulares Simples
     t_PLUS    = r'\+'
     t_MINUS   = r'-'
     t_TIMES   = r'\*'

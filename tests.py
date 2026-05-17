@@ -23,7 +23,6 @@ def run_test(file_path):
 
         combined_output = output + error_output
         
-        # Check if VM cde is present
         if "----- Código -----" in combined_output:
             parts = combined_output.split("----- Código -----")
             if len(parts) > 1 and parts[1].strip():
@@ -65,12 +64,7 @@ def main():
         expected = expectations.get(filename, "N/A")
         
         result_type, detail = run_test(file_path)
-        
-        # Verification logic
-        # If expected contains "Correto" and result_type is "✅ Correto" -> OK
-        # If expected contains "Erro Semântico" and result_type is "❌ Erro Semântico" -> OK
-        # If expected contains "Erro Sintático" and result_type is "❌ Erro Sintático" -> OK
-        
+       
         is_ok = False
         if "Correto" in expected and result_type == "✅ Correto":
             is_ok = True
@@ -90,7 +84,7 @@ def main():
         if result_type == "✅ Correto":
             print("   Código VM Gerado:")
             vm_lines = detail.split('\n')
-            for line in vm_lines[:15]: # Show up to 15 lines
+            for line in vm_lines[:15]:
                 print(f"      {line}")
             if len(vm_lines) > 15:
                 print(f"      ... ({len(vm_lines)-15} mais linhas)")

@@ -13,12 +13,12 @@ class SymbolTable():
     def lookup(self, id):
         if id not in self.__table:
             raise SemanticError(f"Undeclared variable: {id}")
-        return self.__table[id] # Returns the dict {'type': type, 'initialized': bool}
+        return self.__table[id] 
 
     def declare(self, id, var_type, arg_size=None):
         if isinstance(id, tuple) and id[0] == 'array_decl':
             name = id[1]
-            dim_exprs = id[2] # List of expressions
+            dim_exprs = id[2] 
             if name in self.__table:
                 raise SemanticError(f"Variable {name} already declared")
             

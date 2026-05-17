@@ -21,7 +21,6 @@ def main():
         
         print(f"--- A processar: {filepath} ---")
         
-        # Parsing
         ast = parser.parse(test_code, lexer=f_lexer.lexer)
         
         if ast:

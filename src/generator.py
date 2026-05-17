@@ -41,16 +41,14 @@ class CodeGenerator:
 
         body = program[2]
 
-        # Pre-pass: Calculate total slots (args + locals) for each function for correct POP
         for func in functions:
             _, func_type, func_name, arg_list, body_func = func
             num_args = len(arg_list)
             
-            # Map argument names to avoid counting them as locals
             arg_names = set()
             for arg in arg_list:
                 arg_names.add(arg[1] if isinstance(arg, tuple) else arg)
-            arg_names.add(func_name) # Return slot is not a local
+            arg_names.add(func_name) 
 
             local_count = 0
             for decl in body_func["decls"]:
@@ -61,7 +59,6 @@ class CodeGenerator:
                         continue
                     
                     if isinstance(v_id, tuple) and v_id[0] == 'array_decl':
-                        # v_id = ('array_decl', name, [dim1, dim2, ...])
                         dims = []
                         size = 1
                         for d_expr in v_id[2]:
@@ -81,7 +78,6 @@ class CodeGenerator:
             _, var_type, ids = decl
             for var_id in ids:
                 if isinstance(var_id, tuple) and var_id[0] == 'array_decl':
-                    # Array declaration: ('array_decl', name, [dim1, dim2, ...])
                     name = var_id[1]
                     dims = []
                     size = 1
@@ -97,7 +93,6 @@ class CodeGenerator:
                     self.types[name] = var_type
                     self.next_offset += size
                 else:
-                    # Scalar declaration
                     self.offsets[var_id] = self.next_offset
                     self.kinds[var_id] = 'scalar'
                     self.types[var_id] = var_type
@@ -120,7 +115,7 @@ class CodeGenerator:
         _, func_type, func_name, arg_list, body = func
         self.code.append(f"{func_name}:")
         
-        # 1. Guardar contexto global para restaurar no fim
+        # Guardar contexto global para restaurar no fim
         old_offsets = self.offsets
         old_types = self.types
         old_kinds = self.kinds
@@ -137,15 +132,15 @@ class CodeGenerator:
         self.types[func_name] = func_type
         self.kinds[func_name] = 'scalar'
 
-        # 3. Mapear Argumentos (Offsets Negativos)
+        # Mapear Argumentos (Offsets Negativos)
         for i, arg in enumerate(arg_list):
             # Normalizar nome se for um array no arg_list
             arg_name = arg[1] if isinstance(arg, tuple) else arg
             # O i-ésimo argumento está em -(num_args - i)
             self.offsets[arg_name] = -(num_args - i)
-            self.kinds[arg_name] = 'scalar' # Default
+            self.kinds[arg_name] = 'scalar' 
 
-        # 4. Mapear Variáveis Locais (Offsets Positivos)
+        # Mapear Variáveis Locais (Offsets Positivos)
         local_count = 0
         for decl in body["decls"]:
             _, v_type, ids = decl
@@ -186,15 +181,15 @@ class CodeGenerator:
                     self.kinds[name] = 'scalar'
                     local_count += 1
 
-        # 5. Reservar espaço para as locais na stack
+        # Reservar espaço para as locais na stack
         if local_count > 0:
             self.code.append(f"PUSHN {local_count}")
 
-        # 6. Gerar código para o corpo da função
+        # Gerar código para o corpo da função
         for stmt in body["stmts"]:
             self.visit_statement(stmt)
 
-        # 7. Finalizar 
+        # Finalizar 
         self.code.append("RETURN")
         
         self.offsets = old_offsets
@@ -253,7 +248,7 @@ class CodeGenerator:
                 self.code.append(f"PUSHI {offset}")
                 self.code.append("PADD")
             
-            # 3. Calcular o índice linearizado
+            # Calcular o índice linearizado
             linear_ast = self.compute_linear_offset_ast(indices, shape)
             self.visit_expression(linear_ast)
             self.code.append("PADD")
@@ -297,15 +292,14 @@ class CodeGenerator:
                     self.visit_expression(linear_ast)
                     self.code.append("PADD")
                     
-                    # 2. Lê o valor
+                    # Lê o valor
                     self.code.append("READ")
                     var_type = self.types[name]
                     self.code.append("ATOF" if var_type == "REAL" else "ATOI")
                     
-                    # 3. Guarda
+                    # Guarda
                     self.code.append("STORE 0")
                 else:
-                    # Read into scalar variable
                     self.code.append("READ")
                     var_type = self.types[var_id]
                     self.code.append("ATOF" if var_type == "REAL" else "ATOI")
@@ -375,16 +369,13 @@ class CodeGenerator:
                 kind = self.kinds[value]
                 offset = self.offsets[value]
                 if kind == 'array':
-                    # Passing entire array by reference
                     instr_p = "PUSHFP" if getattr(self, 'is_in_func', False) else "PUSHGP"
                     self.code.append(instr_p)
                     self.code.append(f"PUSHI {offset}")
                     self.code.append("PADD")
                 elif kind == 'array_ref':
-                    # Already an address
                     self.code.append(f"PUSHL {offset}")
                 else:
-                    # Scalar
                     instr = "PUSHL" if getattr(self, 'is_in_func', False) else "PUSHG"
                     self.code.append(f"{instr} {offset}")
             elif tok_type == "TRUE":
@@ -423,12 +414,12 @@ class CodeGenerator:
                 self.code.append(f"PUSHI {offset}")
                 self.code.append("PADD")
             
-            # 3. Somar o índice linearizado (Row-Major)
+            # Somar o índice linearizado (Row-Major)
             linear_ast = self.compute_linear_offset_ast(indices, shape)
             self.visit_expression(linear_ast)
             self.code.append("PADD")
             
-            # 4. Carregar o valor daquele endereço
+            # Carregar o valor daquele endereço
             self.code.append("LOAD 0")
             return
         

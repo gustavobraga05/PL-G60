@@ -17,7 +17,7 @@ class SemanticAnalyzer:
         # Declarar funções
         self.declare_functions(functions)
 
-        #Validar semântica do programa
+        # Validar semântica do programa
         if ast[0] is not None:
             self.analyze_program(ast[0])
 
@@ -27,15 +27,15 @@ class SemanticAnalyzer:
     def analyze_program(self, program):
         _, _, body = program
 
-        # 2. Processar declarações e statements do programa
+        # Processar declarações e statements do programa
         body['stmts'] = self.process_scope(body['decls'], body['stmts'])
 
-        # 3. Verificar se todos os GOTO apontam para rótulos existentes
+        # Verificar se todos os GOTO apontam para rótulos existentes
         undefined = self.goto_labels - self.labeled_statements
         if undefined:
             raise SemanticError(f"GOTO para rótulo(s) inexistente(s): {', '.join(str(l) for l in sorted(undefined))}.")
 
-        # 4. Verificar se sobraram DO loops abertos
+        # Verificar se sobraram DO loops abertos
         if self.pending_do_labels:
             missing_labels = ', '.join(str(l) for l in sorted(self.pending_do_labels))
             raise SemanticError(f"DO loops com rótulos faltantes: {missing_labels}.")
@@ -187,7 +187,6 @@ class SemanticAnalyzer:
         elif kind == 'if':
             return self.visit_if(stmt)
         elif kind == 'goto':
-            # ('goto', label)
             self.goto_labels.add(stmt[1])
             return stmt
 
