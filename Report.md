@@ -326,20 +326,6 @@ ENDIF
  
 O bloco inteiro é eliminado da AST — não gera nenhuma instrução.
  
-**Interação com constant propagation:**
- 
-A eliminação de código morto torna-se ainda mais poderosa quando combinada com constant propagation. Por exemplo:
- 
-```fortran
-INTEGER FLAG
-FLAG = 0
-IF (FLAG .EQ. 1) THEN
-    PRINT *, 'nunca'
-ENDIF
-```
- 
-A constant propagation substitui `FLAG` por `0`, o constant folding avalia `0 .EQ. 1` como `.FALSE.`, e a eliminação de código morto remove o bloco `THEN` inteiramente.
- 
 ### 7.5 Limitações das Otimizações
  
 As otimizações implementadas têm algumas limitações relevantes:
