@@ -15,7 +15,7 @@ def parse_expectations(md_path):
     return expectations
 
 def run_test(file_path):
-    cmd = ["python3", "src/parser.py", file_path]
+    cmd = ["python3", "src/main.py", file_path]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
         output = result.stdout
