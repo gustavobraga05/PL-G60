@@ -49,7 +49,7 @@ Os principais grupos de tokens suportados são:
 
 - **Palavras-chave:** `PROGRAM`, `END`, `INTEGER`, `REAL`, `LOGICAL`, `IF`, `THEN`, `ELSE`, `ENDIF`, `DO`, `CONTINUE`, `GOTO`, `READ`, `PRINT`, `RETURN`, `FUNCTION`, `MOD`, entre outros.
 - **Identificadores e constantes:** `ID`, `INT_CONST`, `REAL_CONST`, `STRING_CONST`.
-- **Operadores aritméticos:** `PLUS`, `MINUS`, `TIMES`, `DIVIDE`, `POWER`.
+- **Operadores aritméticos:** `PLUS`, `MINUS`, `TIMES`, `DIVIDE`.
 - **Operadores relacionais e lógicos (padrão F77):** `.EQ.`, `.NE.`, `.LT.`, `.LE.`, `.GT.`, `.GE.`, `.AND.`, `.OR.`, `.NOT.`, `.TRUE.`, `.FALSE.`.
 
 Exemplo de definição de alguns tokens:
@@ -423,7 +423,7 @@ PADD
 PUSHG I         # Cálculo do índice linearizado:
 PUSHI 1         # (I - 1)
 SUB
-PUSHI 3         # * ncols (d1)
+PUSHI 3         # * Número de colunas
 MUL
 PUSHG J         # + (J - 1)
 PUSHI 1
@@ -433,7 +433,7 @@ PADD            # Soma offset ao ponteiro base
 LOAD 0          # Carrega o valor
 ```
 
-A reserva de memória (instrução `PUSHN`) também é atualizada para considerar o `total_size` linearizado da matriz, garantindo espaço suficiente para todos os elementos.
+A reserva de memória (instrução `PUSHN`) também é atualizada para considerar o `total_size` ($total\_size = d_1 \times d_2 \times \dots \times d_n$) linearizado da matriz, garantindo espaço suficiente para todos os elementos.
 
 ---
 

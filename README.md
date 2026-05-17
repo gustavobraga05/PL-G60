@@ -13,17 +13,17 @@ python3 tests.py
 ```
 
 ### Executar o compilador
-Para executar o compilador sobre um ficheiro Fortran, deve navegar para a pasta `src` e correr o `parser.py`. 
+Para executar o compilador sobre um ficheiro Fortran, deve navegar para a pasta `src` e correr o `main.py`. 
 
 Por predefinição, o ficheiro executado é o `../testFiles/testes_enunciado/ex5.f`:
 ```bash
 cd src
-python3 parser.py
+python3 main.py
 ```
 
 Também pode escolher um ficheiro à sua escolha, passando o caminho como argumento:
 ```bash
-python3 parser.py <caminho_do_ficheiro>
+python3 main.py <caminho_do_ficheiro>
 ```
 Exemplo:
 ```bash

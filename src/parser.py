@@ -220,44 +220,4 @@ def p_error(p):
         print('Erro Sintatico: fim de ficheiro inesperado')
     else:
         print(f"Erro Sintatico na linha {p.lineno} perto de '{p.value}'")
-
-if __name__ == "__main__":
-    f_lexer = FortranLexer()
-    f_lexer.build()
-    parser = yacc.yacc()
-    
-    # Allow passing a test filepath as first arg, otherwise use default
-    filepath = sys.argv[1] if len(sys.argv) > 1 else "../testFiles/testes_enunciado/ex5.f"
-
-    try:
-        with open(filepath, 'r') as f:
-            test_code = f.read()
         
-        print(f"--- A processar: {filepath} ---")
-        
-        ast = parser.parse(test_code, lexer=f_lexer.lexer)
-        
-        if ast:
-            analyzer = SemanticAnalyzer()
-            analyzer.analyze(ast)
-            
-            print("--- Árvore Final ---")
-            pprint.pprint(ast)
-
-            print("----- Código -----")
-            generator = CodeGenerator()
-            final_code = generator.generate(ast)
-
-            for l in final_code:
-                print(l)
-
-
-        else:
-            print("\nFalha ao gerar a AST.")
-
-    except SemanticError as e:
-        print(f"\n❌ Erro Semântico: {e}")
-    except FileNotFoundError:
-        print(f"Erro: O ficheiro '{filepath}' não foi encontrado.")
-    except Exception as e:
-        print(f"Erro durante o processamento: {e}")

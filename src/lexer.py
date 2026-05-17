@@ -39,7 +39,6 @@ class FortranLexer:
     # 3. Expressões Regulares Simples
     t_PLUS    = r'\+'
     t_MINUS   = r'-'
-    t_POWER   = r'\*\*'
     t_TIMES   = r'\*'
     t_DIVIDE  = r'/'
     t_ASSIGN  = r'='
