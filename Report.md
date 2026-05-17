@@ -171,7 +171,7 @@ A implementação encontra-se no ficheiro `semantic.py`, com recurso à tabela d
 - **Validação de Matrizes:** Verifica se o número de índices fornecido em acessos ou atribuições coincide com o número de dimensões declaradas, e se todos os índices são do tipo `INTEGER`.
 - **Gestão de escopos:** Cada função possui a sua própria tabela de símbolos, isolando variáveis locais das globais.
 - **Gestão de rótulos:** Valida a existência e correspondência correta de rótulos para comandos `DO` e `CONTINUE`.
-- **Otimizações:** Aplica constant folding e propagação de constantes através do módulo `optimizer.py` durante a travessia da AST.
+- **Otimizações:** Aplica constant folding através do módulo `optimizer.py` durante a travessia da AST.
 
 ### Tabela de símbolos
 
@@ -322,7 +322,7 @@ IF (.FALSE.) THEN
 ENDIF
 ```
  
-O bloco inteiro é eliminado da AST — não gera nenhuma instrução.
+O bloco inteiro é eliminado da AST: não gera nenhuma instrução.
  
 ### 7.5 Limitações das Otimizações
  
@@ -337,13 +337,14 @@ As otimizações implementadas têm algumas limitações relevantes:
 
 A geração de código é a fase final do processo de compilação, onde a AST validada semanticamente é convertida numa sequência de instruções de uma máquina virtual baseada em pilha. O objetivo é produzir uma representação executável do programa Fortran.
 
-A implementação encontra-se no ficheiro `generator.py`, utilizando o padrão de visita (visitor pattern) para percorrer recursivamente a AST e gerar as instruções correspondentes a cada nó.
+A implementação encontra-se no ficheiro `generator.py`, que percorre recursivamente a AST através de métodos visit_* e gera as instruções correspondentes a cada nó.
 
 ### Principais características
 
 **Gestão de memória:** As variáveis globais são alocadas em endereços fixos (via `PUSHG`/`STOREG`), enquanto as variáveis locais de funções usam endereços relativos à frame atual (via `PUSHL`/`STOREL`). O gerador mantém um dicionário `offsets` para mapear cada identificador ao seu endereço.
 
-**Funções:** O gerador cria um prólogo para cada função que: mapeia os argumentos com offsets negativos em relação ao topo da frame, reserva espaço para variáveis locais com `PUSHN`, e termina com `RETURN`. O slot de retorno (nome da função) é mapeado para `-(n+1)`, onde `n` é o número de argumentos.
+**Funções:** O gerador cria um prólogo para cada função que  mapeia os argumentos com offsets negativos em relação ao topo da frame, reserva espaço para variáveis locais com `PUSHN`, e termina com `RETURN`. O slot de retorno (nome da função) é mapeado para `-(n+1)`, onde `n` é o número de argumentos.
+
 
 **Controlo de fluxo:**
 - `DO`: gera etiquetas de início e fim de ciclo, com incremento e verificação da condição.
