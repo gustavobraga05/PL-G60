@@ -161,8 +161,7 @@ Esta AST serve de base para as fases seguintes de análise semântica e geraçã
 
 A análise semântica é responsável por validar a correção lógica e contextual do programa após a análise sintática. Esta fase assegura que o código respeita as regras semânticas da linguagem Fortran, como coerência de tipos, existência e âmbito de identificadores, e chamadas a funções com argumentos corretos.
 
-A implementação encontra-se no ficheiro `semantic.py`, com recurso à tabela de símbolos definida em `symbolTable.py`. A tabela suporta escopos aninhados, permitindo a correta gestão de variáveis globais, locais e argumentos de funções.
-
+A implementação encontra-se no ficheiro `semantic.py`, com recurso à tabela de símbolos definida em `symbolTable.py`. A tabela suporta um nível de escopo por função, isolando as variáveis locais das globais através da reinicialização da tabela de variáveis no início de cada função.
 ### Principais validações
 
 - **Declaração e uso de variáveis:** Verifica duplicação de identificadores e uso de variáveis não declaradas. Uma variável usada sem declaração prévia lança um `SemanticError`.
@@ -182,7 +181,7 @@ Cada entrada na tabela de símbolos para um array contém:
     'type': 'INTEGER',       # Tipo da variável
     'initialized': False,    # Se já foi atribuída
     'kind': 'array',         # 'scalar', 'array' ou 'function'
-    'shape': [3, 3],         # Dimensões da matriz (ex: M(3,3))
+    'dimensions': [3, 3],         # Dimensões da matriz (ex: M(3,3))
     'total_size': 9,         # Tamanho total (produto das dimensões)
     'const': None,           
     'const_type': None,
@@ -343,7 +342,7 @@ A implementação encontra-se no ficheiro `generator.py`, que percorre recursiva
 
 **Gestão de memória:** As variáveis globais são alocadas em endereços fixos (via `PUSHG`/`STOREG`), enquanto as variáveis locais de funções usam endereços relativos à frame atual (via `PUSHL`/`STOREL`). O gerador mantém um dicionário `offsets` para mapear cada identificador ao seu endereço.
 
-**Funções:** O gerador cria um prólogo para cada função que  mapeia os argumentos com offsets negativos em relação ao topo da frame, reserva espaço para variáveis locais com `PUSHN`, e termina com `RETURN`. O slot de retorno (nome da função) é mapeado para `-(n+1)`, onde `n` é o número de argumentos.
+**Funções:** O gerador cria um prólogo para cada função que  mapeia os argumentos com offsets negativos em relação ao topo da frame, reserva espaço para variáveis locais com `PUSHN`, e termina com `RETURN`. O slot de retorno (nome da função) é mapeado para `-(n+1)`, onde `n` é o número de argumentos.Após o retorno, é emitido POP n para limpar os argumentos da stack.
 
 
 **Controlo de fluxo:**
