@@ -301,21 +301,19 @@ STOREG 0
 ```
  
 Em vez do código com saltos condicionais que seria gerado sem esta otimização:
- 
 ```
-PUSHI 1       ! avaliação da condição
+PUSHI 10      
+PUSHI 3       
+SUP           
+JZ IFELSE1    
 PUSHI 1
-INFEQ
-JZ IFELSE1
-PUSHI 1
-STOREG 0
+STOREG 0     
 JUMP IFEND1
 IFELSE1:
 PUSHI 2
-STOREG 0
+STOREG 0      
 IFEND1:
 ```
- 
 **Exemplo — condição sempre falsa, sem ramo ELSE:**
  
 ```fortran
