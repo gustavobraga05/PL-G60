@@ -10,13 +10,11 @@ class SymbolTable():
         self.__table = {}
         self.__func_table = {}  # Tabela separada para funções
 
-  # if the variable is not declared, raise a semantic error
     def lookup(self, id):
         if id not in self.__table:
             raise SemanticError(f"Undeclared variable: {id}")
         return self.__table[id] # Returns the dict {'type': type, 'initialized': bool}
 
-  # notice that this allows multiple declarations of the same variable
     def declare(self, id, var_type, arg_size=None):
         if isinstance(id, tuple) and id[0] == 'array_decl':
             name = id[1]
@@ -24,7 +22,6 @@ class SymbolTable():
             if name in self.__table:
                 raise SemanticError(f"Variable {name} already declared")
             
-            # For simplicity, assume dimensions are constant during declaration
             dimensions = []
             total_size = 1
             for dim_expr in dim_exprs:
@@ -33,7 +30,6 @@ class SymbolTable():
                     dimensions.append(d)
                     total_size *= d
                 else:
-                    # Fallback or complex F77 arg dimensions
                     dimensions.append(1)
             
             self.__table[name] = {

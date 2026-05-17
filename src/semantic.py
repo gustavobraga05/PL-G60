@@ -4,11 +4,10 @@ from optimizer import fold_constants
 class SemanticAnalyzer:
     def __init__(self):
         self.symbols = SymbolTable()
-        self.pending_do_labels = set()  # Rótulos de DO loops que esperam um CONTINUE
-        self.labeled_statements = set()  # Rótulos de statements encontrados
-        self.goto_labels = set()  # Rótulos usados em GOTO
+        self.pending_do_labels = set()  
+        self.labeled_statements = set() 
+        self.goto_labels = set()  
 
-    # Função de entrada
     def analyze(self, ast):
         if not ast:
             return
@@ -22,7 +21,6 @@ class SemanticAnalyzer:
         if ast[0] is not None:
             self.analyze_program(ast[0])
 
-        # 5. Validar semântica de cada função
         for func in functions:
             self.analyze_function(func)
 
@@ -67,7 +65,6 @@ class SemanticAnalyzer:
                 
         # Registar argumentos como variáveis locais inicializadas
         for arg_name in arg_list:
-            # Argumentos são escalares inicializados
             self.symbols.initialize(arg_name)
 
         # Processar declarações e statements do body da função
@@ -125,7 +122,6 @@ class SemanticAnalyzer:
         except SemanticError:
             pass
         
-        # Se não for função, procurar como variável (array ou scalar)
         entry = self.symbols.lookup(name)
         if entry.get('kind') == 'array':
             expected = len(entry['dimensions'])
@@ -171,7 +167,6 @@ class SemanticAnalyzer:
         if stmt[0] == 'labeled':
             label = stmt[1]
             self.labeled_statements.add(label)
-            # Verificar se este rótulo fecha um DO loop
             if label in self.pending_do_labels:
                 self.pending_do_labels.remove(label)
             inner = stmt[2]
@@ -196,7 +191,6 @@ class SemanticAnalyzer:
             self.goto_labels.add(stmt[1])
             return stmt
 
-        # Por omissão, devolve o stmt inalterado
         return stmt
 
 
@@ -217,7 +211,6 @@ class SemanticAnalyzer:
         return ('assign', var_id, optimized_expr)
 
     def visit_array_assign(self, stmt):
-        # ('array_assign', name, indices, value_expr)
         _, name, indices, value_expr = stmt
         entry = self.symbols.lookup(name)
         if entry.get('kind') != 'array':
@@ -228,7 +221,6 @@ class SemanticAnalyzer:
         if len(indices) != expected_dims:
             raise SemanticError(f"Array '{name}' espera {expected_dims} índice(s), recebeu {len(indices)}.")
 
-        # Check indices type
         opt_indices = []
         for index_expr in indices:
             idx_type = self.visit_expression(index_expr)
@@ -236,14 +228,12 @@ class SemanticAnalyzer:
                 raise SemanticError(f"Índices de array para '{name}' devem ser INTEGER, recebeu {idx_type}.")
             opt_indices.append(self.canonicalize_expression(fold_constants(index_expr, self.symbols)))
         
-        # Check value type
         value_type = self.visit_expression(value_expr)
         if value_type != expected_type and not (value_type == 'INTEGER' and expected_type == 'REAL'):
             raise SemanticError(f"Não é possível atribuir uma expressão '{value_type}' ao array '{name}' (declarado como {expected_type}).")
 
         self.symbols.initialize(name)
 
-        # Otimização do valor
         val_opt = self.canonicalize_expression(fold_constants(value_expr, self.symbols))
         return ('array_assign', name, opt_indices, val_opt)
     
@@ -252,7 +242,6 @@ class SemanticAnalyzer:
         new_list = []
         for expr in expr_list:
             new_expr = self.canonicalize_expression(fold_constants(expr, self.symbols))
-            # Também valida tipos/uso das variáveis
             self.visit_expression(new_expr)
             new_list.append(new_expr)
         return ('print', new_list)
@@ -268,7 +257,6 @@ class SemanticAnalyzer:
                 if entry.get('kind') != 'array':
                     raise SemanticError(f"'{name}' não é um array.")
                 
-                # Validate indices
                 opt_indices = []
                 for idx_expr in indices:
                     if self.visit_expression(idx_expr) != 'INTEGER':
@@ -286,7 +274,6 @@ class SemanticAnalyzer:
     def visit_do(self, stmt):
         _, label, var_id, start_expr, end_expr = stmt
         
-        # Registar que este DO loop espera um statement com este rótulo
         self.pending_do_labels.add(label)
         
         entry = self.symbols.lookup(var_id)
@@ -307,20 +294,16 @@ class SemanticAnalyzer:
     def visit_if(self, stmt):
         _, cond_expr, then_stmts, else_stmts = stmt
 
-        # Dobrar constantes na condição
         cond_opt = self.canonicalize_expression(fold_constants(cond_expr, self.symbols))
 
         cond_type = self.visit_condition(cond_opt)
         if cond_type != 'LOGICAL':
             raise SemanticError(f"A condição do IF deve ser LOGICAL, recebido: {cond_type}")
 
-        # Se a condição é constante, eliminar código morto
         if cond_opt[0] == 'val' and (cond_opt[2] in ['TRUE', 'FALSE'] or str(cond_opt[1]).upper() in ['.TRUE.', '.FALSE.']):
             is_true = True if (cond_opt[2] == 'TRUE' or str(cond_opt[1]).upper() == '.TRUE.') else False
             if is_true:
-                # Mantém apenas o bloco 'then'
                 new_then = []
-                #Percorre os statements do bloco 'then'
                 for s in then_stmts:
                     r = self.visit_statement(s)
                     if r is None:
@@ -333,7 +316,6 @@ class SemanticAnalyzer:
                     return None
                 return new_then if len(new_then) > 1 else new_then[0]
             else:
-                # Mantém apenas o bloco 'else' (se existir)
                 if else_stmts:
                     new_else = []
                     for s in else_stmts:
@@ -348,7 +330,6 @@ class SemanticAnalyzer:
                         return None
                     return new_else if len(new_else) > 1 else new_else[0]
                 else:
-                    # Nenhum código permanece
                     return None
 
         new_then = []
@@ -470,5 +451,4 @@ class SemanticAnalyzer:
             return 'LOGICAL'
             
         else:
-            # Caso uma expressão normal (ex: ID) seja avaliada como condição: `IF (FLAG)` onde FLAG é ID
             return self.visit_expression(cond)

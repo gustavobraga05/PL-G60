@@ -8,14 +8,11 @@ from symbolTable import SemanticError
 from generator import CodeGenerator
 
 def main():
-    # Inicialização do Lexer
     f_lexer = FortranLexer()
     f_lexer.build()
     
-    # Inicialização do Parser usando o módulo parser.py para as regras da gramática
     parser = yacc.yacc(module=parser_module)
     
-    # Define o ficheiro a processar (argumento CLI ou default)
     filepath = sys.argv[1] if len(sys.argv) > 1 else "../testFiles/testes_enunciado/ex5.f"
 
     try:

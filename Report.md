@@ -330,10 +330,9 @@ O bloco inteiro é eliminado da AST — não gera nenhuma instrução.
  
 As otimizações implementadas têm algumas limitações relevantes:
  
-- **Sem análise de fluxo de controlo:** Se uma variável for modificada dentro de um bloco `IF` ou `DO`, o compilador pode não reconhecer que o valor constante deixou de ser válido, podendo propagar um valor incorreto.
-- **Arrays não são otimizados:** O constant folding não é aplicado a acessos a arrays, uma vez que os índices podem variar em tempo de execução.
 - **Eliminação de código morto limitada a `IF`:** A eliminação de código morto só atua em blocos condicionais com condição constante. Código morto após `GOTO` ou em ciclos `DO` com limites impossíveis não é eliminado.
 - **Divisão por zero não é detetada:** O otimizador de `MOD` verifica divisão por zero e recua para o nó original, mas para a divisão aritmética (`/`) não existe essa verificação explícita.
+- **Falta de propagação de constantes entre variáveis:** O otimizador simplifica expressões compostas por literais, mas não substitui variáveis pelo seu valor constante conhecido, mesmo que estas tenham sido inicializadas com uma constante anteriormente.
 ---
 
 ## 8. Geração de Código
@@ -431,7 +430,7 @@ A análise léxica, com recurso ao PLY, mostrou-se adequada para lidar com as pa
 
 A análise sintática cobriu as principais construções da linguagem Fortran 77, produzindo uma AST que serve de interface limpa entre o front-end e o back-end do compilador. A análise semântica assegurou a correção lógica dos programas através de validações de tipos, escopos e uso de variáveis. O recente suporte a **matrizes multidimensionais** expandiu significativamente a capacidade de processamento de dados do compilador, utilizando técnicas robustas de linearização de memória.
 
-O módulo de otimizações, com constant folding, permitiu reduzir o número de instruções geradas em casos comuns, melhorando a eficiência do código produzido. No entanto, as otimizações implementadas têm um âmbito local e não contemplam análise de fluxo de controlo, eliminação de código morto ou otimizações inter-procedurais — aspetos que poderiam ser explorados em trabalho futuro.
+O módulo de otimizações, com constant folding e eliminação de código morto em blocos condicionais, permitiu reduzir o número de instruções geradas em casos comuns, melhorando a eficiência do código produzido. 
 
 A geração de código para uma máquina virtual baseada em pilha revelou-se uma escolha adequada para este projeto, simplificando a tradução de expressões e a gestão de memória. A distinção entre variáveis globais e locais, a gestão de frames de função e o suporte a arrays constituíram os principais desafios desta fase.
 

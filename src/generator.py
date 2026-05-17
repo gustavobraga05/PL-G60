@@ -8,7 +8,7 @@ class CodeGenerator:
         self.code = []
         self.label_count = 0
         self.do_loops = {}
-        self.func_slots = {} # Track total slots (args + locals) for POP instruction
+        self.func_slots = {} 
 
     def _new_label(self, prefix):
         self.label_count += 1
@@ -16,7 +16,7 @@ class CodeGenerator:
 
     def compute_linear_offset_ast(self, indices, shape):
         """
-        Função utilizada para calcular o offset 
+        Função utilizada para calcular o offset das matrizes 
         """
 
         current_offset_ast = ('binop', '-', indices[0], ('val', 1, 'INT_CONST'))
@@ -125,22 +125,19 @@ class CodeGenerator:
         old_types = self.types
         old_kinds = self.kinds
         old_shapes = self.shapes
-        self.offsets = {} # Usaremos apenas offsets locais aqui dentro
+        self.offsets = {} 
         self.types = {}
         self.kinds = {}
         self.shapes = {}
-        self.is_in_func = True # Flag para usar PUSHL/STOREL
+        self.is_in_func = True 
         
         num_args = len(arg_list)
 
-        # 2. Mapear o Slot de Retorno (Nome da Função)
-        # Ocupa a posição -(n + 1)
         self.offsets[func_name] = -(num_args + 1)
         self.types[func_name] = func_type
         self.kinds[func_name] = 'scalar'
 
         # 3. Mapear Argumentos (Offsets Negativos)
-        # Se n=1, arg está em -1. Se n=2, args estão em -2 e -1.
         for i, arg in enumerate(arg_list):
             # Normalizar nome se for um array no arg_list
             arg_name = arg[1] if isinstance(arg, tuple) else arg
@@ -157,13 +154,10 @@ class CodeGenerator:
                 
                 is_array_decl = isinstance(v_id, tuple) and v_id[0] == 'array_decl'
 
-                # Se já está mapeado (é argumento ou o nome da função), apenas definimos o tipo e kind
                 if name in self.offsets:
                     self.types[name] = v_type
                     if is_array_decl:
                         self.kinds[name] = 'array_ref'
-                        # For references, shape might be needed if passed to other funcs, 
-                        # but usually F77 needs it declared.
                         dims = []
                         for d_expr in v_id[2]:
                             if d_expr[0] == 'val' and d_expr[2] == 'INT_CONST':
@@ -172,7 +166,6 @@ class CodeGenerator:
                         self.shapes[name] = dims
                     continue
                 
-                # Nova variável local (começa no offset 0)
                 self.offsets[name] = local_count
                 self.types[name] = v_type
                 
@@ -201,7 +194,7 @@ class CodeGenerator:
         for stmt in body["stmts"]:
             self.visit_statement(stmt)
 
-        # 7. Finalizar e restaurar contexto
+        # 7. Finalizar 
         self.code.append("RETURN")
         
         self.offsets = old_offsets
@@ -260,15 +253,13 @@ class CodeGenerator:
                 self.code.append(f"PUSHI {offset}")
                 self.code.append("PADD")
             
-            # 3. Calcular o índice linearizado e somar ao ponteiro
+            # 3. Calcular o índice linearizado
             linear_ast = self.compute_linear_offset_ast(indices, shape)
             self.visit_expression(linear_ast)
             self.code.append("PADD")
             
-            # 4. Calcular o valor a ser guardado
             self.visit_expression(value_expr)
             
-            # 5. Guardar
             self.code.append("STORE 0")
 
         elif stmt_kind == "print":

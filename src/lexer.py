@@ -46,7 +46,7 @@ class FortranLexer:
     t_RPAREN  = r'\)'
     t_COMMA   = r','
 
-    # Operadores de Comparação e Lógicos (F77 Standard)
+    # Operadores de Comparação e Lógicos 
     t_EQ = r'\.EQ\.'
     t_NE = r'\.NE\.'
     t_LT = r'\.LT\.'
@@ -69,11 +69,8 @@ class FortranLexer:
         self.expecting_label = False
         self.expecting_io_star = False
 
-    # 4. Regras com Funções (Ordem Importa)
-
     def t_REAL_CONST(self, t):
         r'\d+\.\d+([ED][+-]?\d+)?'
-        # Normaliza 'D' para 'E' para o float do Python entender
         val = t.value.upper().replace('D', 'E')
         t.value = float(val)
         return t
@@ -82,7 +79,6 @@ class FortranLexer:
         r'\d+'
         t.value = int(t.value)
         
-        # Lógica de Contexto: É um LABEL ou um número comum?
         if self.at_line_start or self.expecting_label:
             t.type = 'LABEL'
             self.expecting_label = False
@@ -92,14 +88,12 @@ class FortranLexer:
 
     def t_ID(self, t):
         r'[a-zA-Z][a-zA-Z0-9_]*'
-        # Converte para maiúsculas para ser case-insensitive
         val_lower = t.value.lower()
         t.type = self.reserved.get(val_lower, 'ID')
         
-        # Se for um comando de salto ou ciclo, o próximo número é um LABEL
         if t.type in ['GOTO', 'DO']:
             self.expecting_label = True
-        # Se for I/O, o próximo '*' será um STAR, não uma multiplicação
+
         if t.type in ['READ', 'PRINT']:
             self.expecting_io_star = True
             
@@ -108,7 +102,7 @@ class FortranLexer:
 
     def t_STAR(self, t):
         r'\*'
-        # Só transforma em STAR se estivermos num contexto de READ/PRINT
+
         if self.expecting_io_star:
             t.type = 'STAR'
             self.expecting_io_star = False
@@ -124,7 +118,7 @@ class FortranLexer:
     def t_newline(self, t):
         r'\n+'
         t.lexer.lineno += len(t.value)
-        self.at_line_start = True # Nova linha, podemos ter um LABEL
+        self.at_line_start = True 
         self.expecting_io_star = False
 
     def t_comment(self, t):
@@ -148,17 +142,3 @@ class FortranLexer:
             if not tok: break
             print(tok)
 
-# Teste rápido
-if __name__ == "__main__":
-    mylexer = FortranLexer()
-    mylexer.build()
-    
-    code = """
-    PROGRAM TESTE
-    INTEGER I
-    DO 10 I = 1, 5
-    PRINT *, 'Valor:', I
-    10 CONTINUE
-    END
-    """
-    mylexer.test(code)
