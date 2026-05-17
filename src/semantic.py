@@ -214,16 +214,6 @@ class SemanticAnalyzer:
         
         self.symbols.initialize(var_id)
 
-        # Se a expressão é um valor constante, regista-o na symbol table
-        if optimized_expr[0] == 'val' and optimized_expr[2] in ['INT_CONST', 'REAL_CONST', 'STRING_CONST', 'TRUE', 'FALSE']:
-            self.symbols.set_constant(var_id, optimized_expr[1], optimized_expr[2])
-        else:
-            # Atribuição não-constante remove qualquer valor constante anterior
-            try:
-                self.symbols.clear_constant(var_id)
-            except Exception:
-                pass
-
         return ('assign', var_id, optimized_expr)
 
     def visit_array_assign(self, stmt):
@@ -250,12 +240,6 @@ class SemanticAnalyzer:
         value_type = self.visit_expression(value_expr)
         if value_type != expected_type and not (value_type == 'INTEGER' and expected_type == 'REAL'):
             raise SemanticError(f"Não é possível atribuir uma expressão '{value_type}' ao array '{name}' (declarado como {expected_type}).")
-        
-        # Escrever num elemento de array invalida qualquer constante associada ao array
-        try:
-            self.symbols.clear_constant(name)
-        except Exception:
-            pass
 
         self.symbols.initialize(name)
 
@@ -278,11 +262,6 @@ class SemanticAnalyzer:
         new_list = []
         for var_id in id_list:
             if isinstance(var_id, tuple) and var_id[0] == 'array_decl':
-                # No READ this should be an array access, but parser might produce 'array' if it was ID(args)
-                # Actually p_id_list produces 'array_decl' for INTEGER A(3,3). 
-                # p_read_stmt uses id_list. So READ *, A(I,J) will be 'array_decl' or 'array'?
-                # Wait, p_id_list is used in declarations AND read_stmt.
-                # If it is ID(expression_list) in id_list, it is 'array_decl'.
                 name = var_id[1]
                 indices = var_id[2]
                 entry = self.symbols.lookup(name)
@@ -296,18 +275,10 @@ class SemanticAnalyzer:
                         raise SemanticError(f"Índices de '{name}' devem ser INTEGER.")
                     opt_indices.append(self.canonicalize_expression(fold_constants(idx_expr, self.symbols)))
                 
-                try:
-                    self.symbols.clear_constant(name)
-                except Exception:
-                    pass
                 self.symbols.initialize(name)
                 new_list.append(('array', name, opt_indices))
             else:
                 self.symbols.lookup(var_id)
-                try:
-                    self.symbols.clear_constant(var_id)
-                except Exception:
-                    pass
                 self.symbols.initialize(var_id)
                 new_list.append(var_id)
         return ('read', new_list)

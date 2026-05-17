@@ -1,7 +1,7 @@
 """Optimizações independentes do analisador semântico.
 
-Fornece `fold_constants(expr, symbols)` que aplica constant folding e
-propagação de constantes usando a tabela de símbolos.
+Fornece `fold_constants(expr, symbols)` que aplica constant folding 
+de constantes usando a tabela de símbolos.
 """
 from typing import Tuple, Any
 
